@@ -3,7 +3,7 @@ const { rateLimit } = require('express-rate-limit')
 const { upsertUserOnLogin } = require('./users')
 const { requireAuth, requireXhrOnWrite } = require('./guards')
 const { COOKIE_NAME } = require('./session')
-const { autenticarLocal } = require('./local')
+const { autenticarLocal, criarHashFicticio } = require('./local')
 const { hashSenha, verificarSenha, validarNovaSenha } = require('./senha')
 
 function regenerar(req) {
@@ -53,6 +53,8 @@ function authRouter({ pool, oidc, config }) {
   if (!config.loginLocal) {
     r.use('/auth/local', (req, res) => res.status(404).json({ error: 'Não encontrado' }))
   } else {
+    const hashFicticio = criarHashFicticio()
+    hashFicticio.catch(() => {}) // falha aparece no login (verify), não como rejeição não tratada
     // Limite por IP (por instância do app). Conta login e troca de senha juntos.
     const limiteLocal = rateLimit({
       windowMs: 15 * 60 * 1000,
@@ -65,7 +67,7 @@ function authRouter({ pool, oidc, config }) {
     r.post('/auth/local/login', requireXhrOnWrite, limiteLocal, async (req, res, next) => {
       try {
         const { email, senha } = req.body || {}
-        const user = await autenticarLocal(pool, email, senha)
+        const user = await autenticarLocal(pool, email, senha, hashFicticio)
         if (!user) return res.status(401).json({ error: 'credenciais_invalidas' })
         await regenerar(req)
         req.session.userId = user.id

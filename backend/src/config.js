@@ -7,6 +7,14 @@ function parseLoginLocal(valor) {
   throw new Error(`LOGIN_LOCAL inválido: "${valor}". Use ligado ou desligado.`)
 }
 
+// TRUST_PROXY: nº de proxies confiáveis à frente do app (default 1: o nginx). Inteiro >= 0.
+function parseTrustProxy(valor) {
+  if (valor === undefined || valor === null || String(valor).trim() === '') return 1
+  const v = String(valor).trim()
+  if (!/^[0-9]+$/.test(v)) throw new Error(`TRUST_PROXY inválido: "${valor}". Use um número inteiro maior ou igual a 0.`)
+  return parseInt(v, 10)
+}
+
 function loadConfig(env = process.env) {
   const appBaseUrl = env.APP_BASE_URL || 'http://localhost:3000'
   const ddUrl = env.DD_URL || ''
@@ -30,6 +38,7 @@ function loadConfig(env = process.env) {
     dd: ddUrl && ddKey ? { url: ddUrl, apiKey: ddKey } : null,
     secureCookies: appBaseUrl.startsWith('https://'),
     loginLocal: parseLoginLocal(env.LOGIN_LOCAL),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
   }
 }
 

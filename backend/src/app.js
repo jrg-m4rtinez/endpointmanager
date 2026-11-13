@@ -14,8 +14,10 @@ const { statsRouter } = require('./routes/stats')
 function createApp({ pool, ddClient, oidc, config }) {
   const app = express()
   app.disable('x-powered-by')
-  if (config.secureCookies) app.set('trust proxy', 1)
+  // O backend só é acessível pelo nginx: sempre confia nos proxies à frente (req.ip vem do X-Forwarded-For).
+  app.set('trust proxy', config.trustProxy)
   app.locals.pool = pool
+  app.locals.config = config
   app.use(express.json())
   app.use(sessionMiddleware(pool, config))
   app.use(healthRouter({ pool, ddClient }))

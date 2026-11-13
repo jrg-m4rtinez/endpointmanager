@@ -31,7 +31,7 @@ describe('usuarios', () => {
     const r = await admin.get('/usuarios')
     expect(r.status).toBe(200)
     expect(r.body.map((u) => u.papel)).toEqual(['pendente', 'admin'])
-    expect(Object.keys(r.body[0]).sort()).toEqual(['created_at', 'email', 'id', 'nome', 'papel', 'ultimo_login'])
+    expect(Object.keys(r.body[0]).sort()).toEqual(['created_at', 'email', 'id', 'nome', 'origem', 'papel', 'ultimo_login'])
   })
 
   it('admin promove pendente a leitor; o leitor passa a ter GET /endpoints 200 sem novo login', async () => {

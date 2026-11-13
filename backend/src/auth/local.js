@@ -4,29 +4,22 @@ const { hashSenha, verificarSenha, MAXIMO } = require('./senha')
 const MAX_FALHAS = 5
 const BLOQUEIO = '15 minutes'
 
-// Hash fictício, calculado uma vez: e-mail inexistente, conta SSO ou bloqueada também
-// pagam um verify, para o tempo de resposta não revelar se a conta existe.
-let hashFicticio
-function obterHashFicticio() {
-  if (!hashFicticio) {
-    hashFicticio = hashSenha(crypto.randomBytes(24).toString('hex')).catch((err) => {
-      hashFicticio = null
-      throw err
-    })
-  }
-  return hashFicticio
+// Hash fictício, calculado ao criar o router de auth (eager): e-mail inexistente, conta SSO ou
+// bloqueada também pagam um verify, para o tempo de resposta não revelar se a conta existe.
+function criarHashFicticio() {
+  return hashSenha(crypto.randomBytes(24).toString('hex'))
 }
 
-async function falhar(senha) {
-  await verificarSenha(await obterHashFicticio(), typeof senha === 'string' ? senha : '')
+async function falhar(hashFicticio, senha) {
+  await verificarSenha(await hashFicticio, typeof senha === 'string' ? senha : '')
   return null
 }
 
 // Regra L5: cada falha conta; na 5ª, bloqueia por 15 min e zera o contador.
 // Durante o bloqueio nada conta e o bloqueio não é estendido; até a senha certa recebe null.
-async function autenticarLocal(pool, email, senha) {
+async function autenticarLocal(pool, email, senha, hashFicticio) {
   if (typeof email !== 'string' || !email.trim() || typeof senha !== 'string' || !senha || senha.length > MAXIMO) {
-    return falhar(senha)
+    return falhar(hashFicticio, senha)
   }
   const { rows } = await pool.query(
     `SELECT id, senha_hash, (bloqueado_ate IS NOT NULL AND bloqueado_ate > now()) AS bloqueado
@@ -36,7 +29,7 @@ async function autenticarLocal(pool, email, senha) {
     [email.trim()]
   )
   const u = rows[0]
-  if (!u || !u.senha_hash || u.bloqueado) return falhar(senha)
+  if (!u || !u.senha_hash || u.bloqueado) return falhar(hashFicticio, senha)
 
   if (!(await verificarSenha(u.senha_hash, senha))) {
     await pool.query(
@@ -59,4 +52,4 @@ async function autenticarLocal(pool, email, senha) {
   return ok[0] || null
 }
 
-module.exports = { autenticarLocal }
+module.exports = { autenticarLocal, criarHashFicticio }

@@ -40,6 +40,23 @@ async function migrate(pool) {
       ultimo_login TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     )`)
+  // Login local (spec L1): colunas novas, com DEFAULT ou nullable. Mesmo cuidado do tipo_id:
+  // só roda o ALTER quando falta alguma coluna.
+  const colunasLocal = ['origem', 'senha_hash', 'trocar_senha', 'falhas_login', 'bloqueado_ate']
+  const { rows: usuarioCols } = await pool.query(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'usuario' AND column_name = ANY($1)`,
+    [colunasLocal]
+  )
+  if (usuarioCols.length < colunasLocal.length) {
+    await pool.query(`
+      ALTER TABLE usuario
+        ADD COLUMN IF NOT EXISTS origem VARCHAR(10) NOT NULL DEFAULT 'sso' CHECK (origem IN ('sso','local')),
+        ADD COLUMN IF NOT EXISTS senha_hash TEXT,
+        ADD COLUMN IF NOT EXISTS trocar_senha BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS falhas_login INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS bloqueado_ate TIMESTAMP`)
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS endpoint_ignorado (
       id SERIAL PRIMARY KEY,

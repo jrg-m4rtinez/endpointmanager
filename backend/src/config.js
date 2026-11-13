@@ -1,3 +1,12 @@
+// LOGIN_LOCAL: ausente ou "ligado" → true; "desligado" → false; outro valor → erro na subida.
+function parseLoginLocal(valor) {
+  if (valor === undefined || valor === null || String(valor).trim() === '') return true
+  const v = String(valor).trim().toLowerCase()
+  if (v === 'ligado') return true
+  if (v === 'desligado') return false
+  throw new Error(`LOGIN_LOCAL inválido: "${valor}". Use ligado ou desligado.`)
+}
+
 function loadConfig(env = process.env) {
   const appBaseUrl = env.APP_BASE_URL || 'http://localhost:3000'
   const ddUrl = env.DD_URL || ''
@@ -20,6 +29,7 @@ function loadConfig(env = process.env) {
     },
     dd: ddUrl && ddKey ? { url: ddUrl, apiKey: ddKey } : null,
     secureCookies: appBaseUrl.startsWith('https://'),
+    loginLocal: parseLoginLocal(env.LOGIN_LOCAL),
   }
 }
 

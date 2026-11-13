@@ -36,7 +36,8 @@ describe('auth', () => {
     expect(cb.headers.location).toBe('http://localhost:3000/')
     const res = await agent.get('/auth/me')
     expect(res.body).toMatchObject({ email: 'novo@lab.local', papel: 'pendente' })
-    expect(Object.keys(res.body).sort()).toEqual(['email', 'id', 'nome', 'papel'])
+    expect(Object.keys(res.body).sort()).toEqual(['email', 'id', 'nome', 'origem', 'papel', 'trocarSenha'])
+    expect(res.body).toMatchObject({ origem: 'sso', trocarSenha: false })
   })
 
   it('BOOTSTRAP_ADMIN_EMAIL vira admin, sem diferenciar caixa', async () => {

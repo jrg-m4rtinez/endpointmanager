@@ -2,18 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { Construction, Hexagon, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react'
 import { api, logout } from './api.js'
 import Sidebar, { ABAS, abasVisiveis } from './components/Sidebar.jsx'
-import StatCards from './components/StatCards.jsx'
 import PageHeader from './components/PageHeader.jsx'
 import EmptyState from './components/EmptyState.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import AguardandoLiberacao from './pages/AguardandoLiberacao.jsx'
+import NaoClassificados from './pages/NaoClassificados.jsx'
+import Endpoints from './pages/Endpoints.jsx'
 
 const ABA_PADRAO = 'nao-classificados'
 const HEALTH_INTERVALO_MS = 60_000
 
 const DESCRICOES = {
-  endpoints: 'Hosts classificados com criticidade, departamento e tipo.',
-  'nao-classificados': 'Hosts do DefectDojo que ainda não têm classificação.',
   departamentos: 'Áreas responsáveis pelos endpoints.',
   tipos: 'Categorias usadas para agrupar os endpoints.',
   acessos: 'Usuários e seus papéis de acesso.',
@@ -99,7 +98,14 @@ function ErroSessao({ mensagem }) {
 
 /* ---------- Shell ---------- */
 
-// Tasks 10–11 trocam por páginas reais; recebem refreshStats para atualizar os cards.
+// Páginas com header próprio (ações) e StatCards (spec §8: só Endpoints e Não classificados).
+// Recebem onChanged = refreshStats: uma única fonte de /stats para o badge e os cards.
+const PAGINAS = {
+  endpoints: Endpoints,
+  'nao-classificados': NaoClassificados,
+}
+
+// Task 11 troca as demais por páginas reais.
 function PaginaPlaceholder({ aba }) {
   return (
     <EmptyState
@@ -154,6 +160,7 @@ function Shell({ user }) {
   const sair = () => logout().catch(err => notify(err.message, 'error'))
 
   const atual = ABAS.find(a => a.id === aba)
+  const Pagina = PAGINAS[aba]
 
   return (
     <div className="flex min-h-screen">
@@ -167,10 +174,15 @@ function Shell({ user }) {
       />
       <main className="min-w-0 flex-1">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-7 lg:px-10">
-          <PageHeader title={atual.label} description={DESCRICOES[aba]} />
-          <StatCards stats={stats} />
           <div key={aba} className="animate-fade-in">
-            <PaginaPlaceholder aba={atual} refreshStats={refreshStats} />
+            {Pagina ? (
+              <Pagina user={user} stats={stats} onChanged={refreshStats} />
+            ) : (
+              <div className="flex flex-col gap-6">
+                <PageHeader title={atual.label} description={DESCRICOES[aba]} />
+                <PaginaPlaceholder aba={atual} refreshStats={refreshStats} />
+              </div>
+            )}
           </div>
         </div>
       </main>

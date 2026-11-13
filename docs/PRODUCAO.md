@@ -66,7 +66,17 @@ O app grava no mesmo banco que o Grafana lê, no schema `public`. Se esse Postgr
    ALTER TABLE departamento OWNER TO <PG_USER_DONO>;
    ```
 
-   Se as tabelas ainda não existem, o usuário precisa de `CREATE` no schema `public`: `GRANT CREATE ON SCHEMA public TO <PG_USER_DONO>;`.
+   Além de ser dono, o usuário **sempre** precisa de `CREATE` no schema `public`: a migração v2 cria `tipo`, `usuario`, `endpoint_ignorado` e `em_sessao`, e o PostgreSQL 15 ou superior nega `CREATE` em `public` a quem não é dono do schema. Confira:
+
+   ```sql
+   SELECT has_schema_privilege('<PG_USER_DONO>','public','CREATE');
+   ```
+
+   Se retornar `f`, execute como superusuário:
+
+   ```sql
+   GRANT CREATE ON SCHEMA public TO <PG_USER_DONO>;
+   ```
 
 6. Teste a conexão **a partir do `<IP_APP>`**:
 
@@ -161,7 +171,7 @@ O backend recusa subir se faltar qualquer uma destas: `PG_HOST`, `PG_PORT`, `PG_
 
 O app **precisa** ser acessado por `<URL_APP>` (https). Escolha uma opção.
 
-**Opção A, proxy reverso existente (recomendada).** Aponte seu proxy (nginx, Traefik, HAProxy etc.) para `http://<IP_APP>:3000` e termine o TLS nele. O proxy deve repassar `Host` e `X-Forwarded-Proto: https`. Exemplo em nginx:
+**Opção A, proxy reverso existente (recomendada).** Aponte seu proxy (nginx, Traefik, HAProxy etc.) para `http://<IP_APP>:3000` e termine o TLS nele. O proxy deve repassar `Host` e `X-Forwarded-Proto: https`. O nginx do frontend preserva esse header (usa o `X-Forwarded-Proto` recebido quando for `https`, senão o scheme local), e o backend confia nele para emitir o cookie `Secure`. Exemplo em nginx:
 
 ```nginx
 server {
@@ -179,9 +189,14 @@ server {
 }
 ```
 
-**Opção B, certificado no nginx do próprio frontend.** Crie `frontend/nginx.tls.conf`:
+**Opção B, certificado no nginx do próprio frontend.** Crie `frontend/nginx.tls.conf`. Estes snippets da Opção B **não foram testados** em um ambiente TLS real: valide antes de depender deles.
 
 ```nginx
+map $http_x_forwarded_proto $fwd_proto {
+    default $scheme;
+    https   https;
+}
+
 server {
     listen 80;
     return 301 https://$host$request_uri;
@@ -269,7 +284,7 @@ LEFT JOIN tipo t ON t.id = e.tipo_id;
 pg_dump -h <IP_BANCO> -U <PG_USER_DONO> -d <PG_DATABASE> -Fc -f backup-antes-v2.dump
 ```
 
-**Rollback:** a migração é só aditiva (tabelas novas e uma coluna nullable). A v1 ignora o que é novo. Para voltar: `docker compose down`, volte o código da v1 (`git checkout <TAG_OU_COMMIT_V1>`) e rode `docker compose up -d --build` com o `.env` da v1. Nenhum dado se perde. As tabelas novas podem ficar no banco sem problema. Só se precisar restaurar de verdade:
+**Rollback:** a migração é só aditiva (tabelas novas e uma coluna nullable). A v1 ignora o que é novo. Para voltar: **antes de atualizar**, anote o commit atual (`git rev-parse HEAD`) ou o nome da imagem em uso. Depois: `docker compose down`, volte o código para esse commit (`git checkout <COMMIT_ANOTADO>`) e rode `docker compose up -d --build` com o `.env` da v1. Nenhum dado se perde. As tabelas novas podem ficar no banco sem problema. Só se precisar restaurar de verdade (**atenção:** `--clean` apaga e recria os objetos, sobrescrevendo tudo o que foi gravado depois do backup):
 
 ```bash
 pg_restore -h <IP_BANCO> -U <PG_USER_DONO> -d <PG_DATABASE> --clean --if-exists backup-antes-v2.dump
@@ -283,7 +298,8 @@ pg_restore -h <IP_BANCO> -U <PG_USER_DONO> -d <PG_DATABASE> --clean --if-exists 
 | `issuer mismatch` ou `unexpected JWT "iss"` | `OIDC_ISSUER` diferente do emissor real. Use `https://login.microsoftonline.com/<TENANT_ID>/v2.0`, com o tenant ID (não o domínio) e `/v2.0` no fim. |
 | Admin não reconhecido, e-mail vazio | O token veio sem claim `email` e o app usou `preferred_username` (UPN). Adicione o optional claim `email` (passo 4.5) ou ponha o UPN em `BOOTSTRAP_ADMIN_EMAIL`. E-mail com `email_verified: false` é descartado. Depois de corrigir, saia e entre de novo. |
 | `ECONNREFUSED` ou timeout no banco | Firewall, `pg_hba.conf` ou `listen_addresses` (passos 2 e 3). Repita o teste do `psql` do passo 2.6. `no pg_hba.conf entry` significa linha ausente ou IP errado. |
+| `permission denied for schema public` na migração | `PG_USER` sem `CREATE` no schema `public`. Veja o passo 2.5 (`GRANT CREATE ON SCHEMA public ...`). |
 | `must be owner of table departamento_endpoint` na migração | `PG_USER` não é dono. Veja o passo 2.5. |
 | Aba Não classificados dá 502 | `DD_URL` ou `DD_API_KEY` errados, DefectDojo fora do ar, ou sem rota/firewall (passo 3). Teste: `curl -H "Authorization: Token <DD_API_KEY>" "<URL_DEFECTDOJO>/api/v2/url/?limit=1"`. |
-| Volta para o login em loop | `APP_BASE_URL` com `https://` mas o acesso real é HTTP, ou o proxy não manda `X-Forwarded-Proto https`. O cookie `Secure` só funciona sob HTTPS. |
+| Volta para o login em loop | `APP_BASE_URL` com `https://` mas o acesso real é HTTP, ou o proxy externo não manda `X-Forwarded-Proto: https`. O nginx do frontend repassa o valor recebido quando é `https`; sem ele, repassa `http` e o backend não grava o cookie `Secure`. Confira o header no proxy. |
 | Login parou depois de meses | O client secret expirou. Crie outro (passo 4.4), atualize `OIDC_CLIENT_SECRET` e rode `docker compose up -d`. |

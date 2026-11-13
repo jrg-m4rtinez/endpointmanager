@@ -136,7 +136,7 @@ CREATE TABLE endpoint_ignorado (
 );
 ```
 
-Mais a tabela de sessão do `connect-pg-simple`. Se `tipo` estiver vazia, a migração insere `Servidor`, `Aplicação Web` e `Banco de Dados`.
+Mais a tabela de sessão `em_sessao` (`connect-pg-simple`). Se `tipo` estiver vazia, a migração insere `Servidor`, `Aplicação Web` e `Banco de Dados`.
 
 > **Aviso (Grafana):** `departamento` e `departamento_endpoint` mantêm todas as colunas e tipos antigos. Só foi adicionada a coluna nullable `tipo_id`. Nunca renomeie nem remova colunas dessas tabelas: os dashboards dependem delas. O usuário `PG_USER` precisa ser dono de `departamento_endpoint` (a migração faz `ALTER TABLE`).
 

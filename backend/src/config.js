@@ -23,4 +23,20 @@ function loadConfig(env = process.env) {
   }
 }
 
-module.exports = { loadConfig }
+const REQUIRED_VARS = [
+  'PG_HOST', 'PG_PORT', 'PG_USER', 'PG_PASSWORD', 'PG_DATABASE',
+  'SESSION_SECRET', 'APP_BASE_URL', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET',
+]
+
+// Falha rápida na subida: lança erro listando as variáveis obrigatórias ausentes.
+// DD_* são opcionais (sem elas o app sobe sem integração com o DefectDojo).
+function assertRequiredEnv(env = process.env) {
+  const missing = REQUIRED_VARS.filter((k) => !env[k] || !String(env[k]).trim())
+  if (missing.length) {
+    throw new Error(
+      `Variáveis de ambiente obrigatórias ausentes: ${missing.join(', ')}. Confira o .env (modelo em .env.example).`
+    )
+  }
+}
+
+module.exports = { loadConfig, assertRequiredEnv, REQUIRED_VARS }

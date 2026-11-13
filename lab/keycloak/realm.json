@@ -1,0 +1,56 @@
+{
+  "realm": "endpoint-manager",
+  "enabled": true,
+  "sslRequired": "none",
+  "loginWithEmailAllowed": true,
+  "clients": [
+    {
+      "clientId": "endpoint-manager",
+      "name": "Endpoint Manager",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "lab-secret-troque-em-producao",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/api/auth/callback"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3000/*",
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@lab.local",
+      "email": "admin@lab.local",
+      "firstName": "Admin",
+      "lastName": "Lab",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Admin@123", "temporary": false }]
+    },
+    {
+      "username": "leitor@lab.local",
+      "email": "leitor@lab.local",
+      "firstName": "Leitor",
+      "lastName": "Lab",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Leitor@123", "temporary": false }]
+    },
+    {
+      "username": "novo@lab.local",
+      "email": "novo@lab.local",
+      "firstName": "Novo",
+      "lastName": "Lab",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Novo@123", "temporary": false }]
+    }
+  ]
+}

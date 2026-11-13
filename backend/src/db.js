@@ -1,7 +1,10 @@
 const { Pool } = require('pg')
 
 function createPool(config) {
-  return new Pool(config.pg)
+  const pool = new Pool(config.pg)
+  // Erro em cliente ocioso (ex.: banco reiniciou) não deve derrubar o processo.
+  pool.on('error', (err) => console.error('erro em conexão ociosa do Postgres:', err.message))
+  return pool
 }
 
 async function waitForDb(pool, { retries = 30, delayMs = 2000 } = {}) {

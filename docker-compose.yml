@@ -1,15 +1,10 @@
+# Base (produção). Toda a configuração vem do .env (modelo em .env.example).
+# Só o frontend publica porta; o backend fica acessível apenas pela rede interna (nginx -> backend:3001).
 services:
   backend:
     build: ./backend
     container_name: endpoint-manager-api
-    ports:
-      - "3001:3001"
-    environment:
-      - PG_HOST=10.10.10.118
-      - PG_PORT=${PG_PORT:-5432}
-      - PG_USER=defectdojo
-      - PG_PASSWORD=defectdojo
-      - PG_DATABASE=defectdojo
+    env_file: .env
     restart: unless-stopped
 
   frontend:

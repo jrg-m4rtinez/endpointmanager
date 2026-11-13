@@ -16,7 +16,8 @@ function authRouter({ pool, oidc, config }) {
 
   r.get('/auth/callback', async (req, res) => {
     try {
-      const currentUrl = new URL(req.originalUrl, config.appBaseUrl)
+      // O nginx remove o prefixo /api; reconstrói a URL pública para casar com o redirect_uri.
+      const currentUrl = new URL(config.appBaseUrl.replace(/\/+$/, '') + '/api' + req.originalUrl)
       const claims = await oidc.finishLogin(req.session, currentUrl)
       const user = await upsertUserOnLogin(pool, claims, config.bootstrapAdminEmail)
       await new Promise((resolve, reject) =>

@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, CloudOff, EyeOff, LoaderCircle, PartyPopper, RefreshCw, Undo2 } from 'lucide-react'
+import { Check, EyeOff, LoaderCircle, PartyPopper, RefreshCw, Undo2 } from 'lucide-react'
 import { api } from '../api.js'
 import PageHeader from '../components/PageHeader.jsx'
 import StatCards from '../components/StatCards.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import InlineSelect from '../components/InlineSelect.jsx'
+import CardErro from '../components/CardErro.jsx'
+import Esqueleto from '../components/Esqueleto.jsx'
+import { idOuNull, opcoesComSem } from '../components/opcoes.js'
 import { OPCOES_CRITICIDADE } from '../components/Criticidade.jsx'
 import { useToast } from '../components/Toast.jsx'
 
-// Valor da opção "Sem departamento" / "Sem tipo" no select; vira null no envio.
-const SEM = 'sem'
 const SAIDA_MS = 320
-
-const idOuNull = v => (typeof v === 'number' ? v : null)
 
 function faixaFindings(n) {
   if (n >= 15) return 'border-danger/30 bg-danger/10 text-danger'
@@ -56,17 +55,11 @@ function Toggle({ checked, onChange, label, disabled }) {
   )
 }
 
-function Esqueleto({ admin }) {
+function EsqueletoHosts({ admin }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface" aria-busy="true">
-      <span className="sr-only" role="status">Carregando hosts…</span>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className={`flex items-center gap-4 px-5 py-4 ${i ? 'border-t border-border' : ''}`}
-          style={{ opacity: 1 - i * 0.12 }}
-          aria-hidden="true"
-        >
+    <Esqueleto rotulo="Carregando hosts…">
+      {() => (
+        <>
           <div className="flex-1 space-y-2">
             <div className="h-3.5 w-44 animate-pulse rounded bg-white/[0.06]" />
             <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.04]" />
@@ -78,35 +71,9 @@ function Esqueleto({ admin }) {
               <div className="h-8 w-8 animate-pulse rounded-lg bg-accent/20" />
             </div>
           )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function CardErro({ erro, onRetry, tentando }) {
-  return (
-    <div role="alert" className="flex animate-fade-in flex-col items-center rounded-2xl border border-danger/25 bg-gradient-to-b from-danger/[0.07] to-surface px-6 py-14 text-center">
-      <div className="mb-4 grid size-12 place-items-center rounded-xl border border-danger/30 bg-danger/10 text-danger">
-        <CloudOff className="size-5" aria-hidden="true" />
-      </div>
-      <h2 className="text-sm font-semibold text-fg">Não foi possível carregar os hosts</h2>
-      <p className="mt-1.5 max-w-md text-sm leading-relaxed text-muted">{erro.message}</p>
-      {erro.detalhe && (
-        <p className="mt-3 max-w-md truncate rounded-md border border-border bg-bg/60 px-2.5 py-1 font-mono text-[11px] text-subtle" title={String(erro.detalhe)}>
-          {String(erro.detalhe)}
-        </p>
+        </>
       )}
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={tentando}
-        className="mt-6 inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
-      >
-        <RefreshCw className={`size-4 ${tentando ? 'animate-spin' : ''}`} aria-hidden="true" />
-        Tentar de novo
-      </button>
-    </div>
+    </Esqueleto>
   )
 }
 
@@ -265,8 +232,8 @@ export default function NaoClassificados({ user, stats, onChanged }) {
     if (!admin) return
     Promise.all([api('/departamentos'), api('/tipos')])
       .then(([d, t]) => {
-        setDepartamentos([{ value: SEM, label: 'Sem departamento' }, ...d.map(x => ({ value: x.id, label: x.nome }))])
-        setTipos([{ value: SEM, label: 'Sem tipo' }, ...t.map(x => ({ value: x.id, label: x.nome }))])
+        setDepartamentos(opcoesComSem(d, 'Sem departamento'))
+        setTipos(opcoesComSem(t, 'Sem tipo'))
       })
       .catch(err => notify(err.message, 'error'))
   }, [admin, notify])
@@ -352,9 +319,17 @@ export default function NaoClassificados({ user, stats, onChanged }) {
 
   let conteudo
   if (erro) {
-    conteudo = <CardErro erro={erro} tentando={recarregando} onRetry={() => carregar({ atualizar: true })} />
+    conteudo = (
+      <CardErro
+        titulo="Não foi possível carregar os hosts"
+        mensagem={erro.message}
+        detalhe={erro.detalhe}
+        tentando={recarregando}
+        onRetry={() => carregar({ atualizar: true })}
+      />
+    )
   } else if (itens === null) {
-    conteudo = <Esqueleto admin={admin} />
+    conteudo = <EsqueletoHosts admin={admin} />
   } else if (itens.length === 0) {
     conteudo = (
       <EmptyState

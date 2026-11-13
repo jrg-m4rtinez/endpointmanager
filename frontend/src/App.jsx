@@ -1,22 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Construction, Hexagon, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Hexagon, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react'
 import { api, logout } from './api.js'
-import Sidebar, { ABAS, abasVisiveis } from './components/Sidebar.jsx'
-import PageHeader from './components/PageHeader.jsx'
-import EmptyState from './components/EmptyState.jsx'
+import Sidebar, { abasVisiveis } from './components/Sidebar.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import AguardandoLiberacao from './pages/AguardandoLiberacao.jsx'
 import NaoClassificados from './pages/NaoClassificados.jsx'
 import Endpoints from './pages/Endpoints.jsx'
+import Departamentos from './pages/Departamentos.jsx'
+import Tipos from './pages/Tipos.jsx'
+import Acessos from './pages/Acessos.jsx'
 
 const ABA_PADRAO = 'nao-classificados'
 const HEALTH_INTERVALO_MS = 60_000
-
-const DESCRICOES = {
-  departamentos: 'Áreas responsáveis pelos endpoints.',
-  tipos: 'Categorias usadas para agrupar os endpoints.',
-  acessos: 'Usuários e seus papéis de acesso.',
-}
 
 function abaDoHash(user) {
   const id = window.location.hash.replace(/^#/, '')
@@ -98,25 +93,18 @@ function ErroSessao({ mensagem }) {
 
 /* ---------- Shell ---------- */
 
-// Páginas com header próprio (ações) e StatCards (spec §8: só Endpoints e Não classificados).
-// Recebem onChanged = refreshStats: uma única fonte de /stats para o badge e os cards.
+// Cada página tem header próprio. StatCards só em Endpoints e Não classificados (spec §8).
+// onChanged = refreshStats: uma única fonte de /stats para o badge e os cards.
+// onSessao recarrega /auth/me (ex.: admin que rebaixou o próprio papel).
 const PAGINAS = {
   endpoints: Endpoints,
   'nao-classificados': NaoClassificados,
+  departamentos: Departamentos,
+  tipos: Tipos,
+  acessos: Acessos,
 }
 
-// Task 11 troca as demais por páginas reais.
-function PaginaPlaceholder({ aba }) {
-  return (
-    <EmptyState
-      icon={aba.icon || Construction}
-      title={`${aba.label} em construção`}
-      description="Esta página chega nas próximas etapas da v2."
-    />
-  )
-}
-
-function Shell({ user }) {
+function Shell({ user, onSessao }) {
   const { notify } = useToast()
   const [aba, setAba] = useState(() => abaDoHash(user))
   const [health, setHealth] = useState(null)
@@ -125,9 +113,12 @@ function Shell({ user }) {
   useEffect(() => {
     const onHash = () => setAba(abaDoHash(user))
     window.addEventListener('hashchange', onHash)
-    if (window.location.hash !== `#${aba}`) window.history.replaceState(null, '', `#${aba}`)
+    // Normaliza o hash ao montar e quando o papel muda (aba que deixou de ser visível → padrão).
+    const atual = abaDoHash(user)
+    setAba(atual)
+    if (window.location.hash !== `#${atual}`) window.history.replaceState(null, '', `#${atual}`)
     return () => window.removeEventListener('hashchange', onHash)
-  }, [user]) // aba inicial só normaliza o hash uma vez por usuário
+  }, [user])
 
   useEffect(() => {
     let vivo = true
@@ -159,7 +150,6 @@ function Shell({ user }) {
 
   const sair = () => logout().catch(err => notify(err.message, 'error'))
 
-  const atual = ABAS.find(a => a.id === aba)
   const Pagina = PAGINAS[aba]
 
   return (
@@ -175,14 +165,7 @@ function Shell({ user }) {
       <main className="min-w-0 flex-1">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-7 lg:px-10">
           <div key={aba} className="animate-fade-in">
-            {Pagina ? (
-              <Pagina user={user} stats={stats} onChanged={refreshStats} />
-            ) : (
-              <div className="flex flex-col gap-6">
-                <PageHeader title={atual.label} description={DESCRICOES[aba]} />
-                <PaginaPlaceholder aba={atual} refreshStats={refreshStats} />
-              </div>
-            )}
+            <Pagina user={user} stats={stats} onChanged={refreshStats} onSessao={onSessao} />
           </div>
         </div>
       </main>
@@ -206,6 +189,14 @@ function Raiz() {
 
   const sair = () => logout().catch(err => notify(err.message, 'error'))
 
+  const recarregarSessao = useCallback(
+    () =>
+      api('/auth/me')
+        .then(user => setEstado({ tipo: 'pronto', user }))
+        .catch(err => notify(err.message, 'error')),
+    [notify]
+  )
+
   switch (estado.tipo) {
     case 'carregando':
       return <Carregando />
@@ -216,7 +207,7 @@ function Raiz() {
     default:
       return estado.user.papel === 'pendente'
         ? <AguardandoLiberacao user={estado.user} onLogout={sair} />
-        : <Shell user={estado.user} />
+        : <Shell user={estado.user} onSessao={recarregarSessao} />
   }
 }
 

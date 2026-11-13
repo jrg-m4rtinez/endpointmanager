@@ -1,58 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, CloudOff, FilterX, LoaderCircle, Pencil, Plus, RefreshCw, Search, Server, Trash2, X } from 'lucide-react'
+import { Check, FilterX, LoaderCircle, Pencil, Plus, Search, Server, Trash2, X } from 'lucide-react'
 import { api } from '../api.js'
 import PageHeader from '../components/PageHeader.jsx'
 import StatCards from '../components/StatCards.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import InlineSelect from '../components/InlineSelect.jsx'
+import CardErro from '../components/CardErro.jsx'
+import Esqueleto from '../components/Esqueleto.jsx'
+import { SEM, idOuNull, opcoesComSem } from '../components/opcoes.js'
 import { CritBadge, OPCOES_CRITICIDADE } from '../components/Criticidade.jsx'
 import { useToast } from '../components/Toast.jsx'
 
-const SEM = 'sem' // "Sem departamento" / "Sem tipo"
 const TODOS = 'todos'
 const NOVO = 'novo'
 const DESTAQUE_MS = 1800
 
-const idOuNull = v => (typeof v === 'number' ? v : null)
 const paraSelect = id => (id === null || id === undefined ? SEM : id)
 
 const btnIcone =
   'grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-white/5 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40'
 
-function Esqueleto() {
+function EsqueletoEndpoints() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface" aria-busy="true">
-      <span className="sr-only" role="status">Carregando endpoints…</span>
-      <div className="h-10 border-b border-border bg-white/[0.015]" aria-hidden="true" />
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className={`flex items-center gap-6 px-5 py-4 ${i ? 'border-t border-border' : ''}`} style={{ opacity: 1 - i * 0.12 }} aria-hidden="true">
+    <Esqueleto rotulo="Carregando endpoints…" cabecalho linhaClassName="flex items-center gap-6 px-5 py-4">
+      {() => (
+        <>
           <div className="h-3.5 w-48 animate-pulse rounded bg-white/[0.06]" />
           <div className="h-6 w-20 animate-pulse rounded-full bg-white/[0.05]" />
           <div className="h-3 w-24 animate-pulse rounded bg-white/[0.04]" />
           <div className="h-3 w-20 animate-pulse rounded bg-white/[0.04]" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function CardErro({ mensagem, onRetry }) {
-  return (
-    <div role="alert" className="flex animate-fade-in flex-col items-center rounded-2xl border border-danger/25 bg-gradient-to-b from-danger/[0.07] to-surface px-6 py-14 text-center">
-      <div className="mb-4 grid size-12 place-items-center rounded-xl border border-danger/30 bg-danger/10 text-danger">
-        <CloudOff className="size-5" aria-hidden="true" />
-      </div>
-      <h2 className="text-sm font-semibold text-fg">Não foi possível carregar os endpoints</h2>
-      <p className="mt-1.5 max-w-md text-sm leading-relaxed text-muted">{mensagem}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-6 inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-white shadow-lg shadow-accent/20 transition-colors hover:bg-accent-hover"
-      >
-        <RefreshCw className="size-4" aria-hidden="true" />
-        Tentar de novo
-      </button>
-    </div>
+        </>
+      )}
+    </Esqueleto>
   )
 }
 
@@ -249,11 +228,11 @@ export default function Endpoints({ user, stats, onChanged }) {
   }, [destaque])
 
   const departamentos = useMemo(
-    () => [{ value: SEM, label: 'Sem departamento' }, ...depsRaw.map(d => ({ value: d.id, label: d.nome }))],
+    () => opcoesComSem(depsRaw, 'Sem departamento'),
     [depsRaw]
   )
   const tipos = useMemo(
-    () => [{ value: SEM, label: 'Sem tipo' }, ...tiposRaw.map(t => ({ value: t.id, label: t.nome }))],
+    () => opcoesComSem(tiposRaw, 'Sem tipo'),
     [tiposRaw]
   )
 
@@ -383,6 +362,7 @@ export default function Endpoints({ user, stats, onChanged }) {
   if (erro) {
     conteudo = (
       <CardErro
+        titulo="Não foi possível carregar os endpoints"
         mensagem={erro}
         onRetry={() => {
           setErro(null)
@@ -392,7 +372,7 @@ export default function Endpoints({ user, stats, onChanged }) {
       />
     )
   } else if (lista === null) {
-    conteudo = <Esqueleto />
+    conteudo = <EsqueletoEndpoints />
   } else if (lista.length === 0 && edit?.id !== NOVO) {
     conteudo = (
       <EmptyState

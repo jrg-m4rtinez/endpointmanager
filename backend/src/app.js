@@ -7,6 +7,7 @@ const { requireAuth, requireXhrOnWrite } = require('./auth/guards')
 const { departamentosRouter } = require('./routes/departamentos')
 const { tiposRouter } = require('./routes/tipos')
 const { endpointsRouter } = require('./routes/endpoints')
+const { usuariosRouter } = require('./routes/usuarios')
 
 function createApp({ pool, ddClient, oidc, config }) {
   const app = express()
@@ -18,7 +19,7 @@ function createApp({ pool, ddClient, oidc, config }) {
   app.use(authRouter({ pool, oidc, config }))
   // Rotas de dados: requireAuth + requireXhrOnWrite; cada router aplica requireRole.
   // Tasks seguintes adicionam seus routers à lista.
-  app.use(requireAuth, requireXhrOnWrite, departamentosRouter(), tiposRouter(), endpointsRouter())
+  app.use(requireAuth, requireXhrOnWrite, departamentosRouter(), tiposRouter(), endpointsRouter(), usuariosRouter())
   app.use(errorHandler)
   return app
 }

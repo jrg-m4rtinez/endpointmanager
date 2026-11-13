@@ -51,4 +51,4 @@ function crudRouter(base, { list, create, update, remove }) {
   return r
 }
 
-module.exports = { crudRouter, runWrite, textoObrigatorio }
+module.exports = { asyncH, parseId, crudRouter, runWrite, textoObrigatorio }

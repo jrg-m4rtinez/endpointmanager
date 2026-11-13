@@ -1,5 +1,6 @@
 const { crudRouter, runWrite, textoObrigatorio } = require('./crudHelpers')
 const { httpError } = require('../errors')
+const { normalizeHost } = require('../defectdojo/hosts')
 
 const SELECT = `SELECT e.id, e.endpoint, e.criticidade, e.departamento_id, d.nome AS departamento_nome,
                        e.tipo_id, t.nome AS tipo_nome, e.created_at
@@ -39,6 +40,8 @@ const endpointsRouter = () =>
         ),
         DUP
       )
+      // Classificado: sai da lista de ignorados.
+      await pool.query('DELETE FROM endpoint_ignorado WHERE host = $1', [normalizeHost(vals[0])])
       return (await pool.query(`${SELECT} WHERE e.id = $1`, [rows[0].id])).rows[0]
     },
     update: async (pool, id, body) => {

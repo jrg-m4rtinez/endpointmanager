@@ -1,0 +1,78 @@
+{
+  "count": 9,
+  "next": "http://dd.test/api/v2/url/?limit=5&offset=5",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "string": "https://api.loja.lab/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "api.loja.lab",
+      "port": 443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 3,
+      "string": "http://api.loja.lab:8080/",
+      "type": "url",
+      "tags": [],
+      "protocol": "http",
+      "user_info": "",
+      "host": "api.loja.lab",
+      "port": 8080,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 4,
+      "string": "https://checkout.loja.lab/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "checkout.loja.lab",
+      "port": 443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 5,
+      "string": "https://db01.infra.lab:8443/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "db01.infra.lab",
+      "port": 8443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 6,
+      "string": "https://db02.infra.lab:8443/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "db02.infra.lab",
+      "port": 8443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    }
+  ],
+  "prefetch": {}
+}

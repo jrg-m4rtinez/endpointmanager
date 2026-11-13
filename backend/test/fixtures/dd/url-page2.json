@@ -1,0 +1,64 @@
+{
+  "count": 9,
+  "next": null,
+  "previous": "http://dd.test/api/v2/url/?limit=5",
+  "results": [
+    {
+      "id": 7,
+      "string": "http://grafana.infra.lab:3000/",
+      "type": "url",
+      "tags": [],
+      "protocol": "http",
+      "user_info": "",
+      "host": "grafana.infra.lab",
+      "port": 3000,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 8,
+      "string": "https://intranet.lab/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "intranet.lab",
+      "port": 443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 9,
+      "string": "https://vpn.rede.lab/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "vpn.rede.lab",
+      "port": 443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    },
+    {
+      "id": 10,
+      "string": "https://fw01.rede.lab:8443/",
+      "type": "url",
+      "tags": [],
+      "protocol": "https",
+      "user_info": "",
+      "host": "fw01.rede.lab",
+      "port": 8443,
+      "path": "",
+      "query": "",
+      "fragment": "",
+      "host_validation_failure": false
+    }
+  ],
+  "prefetch": {}
+}

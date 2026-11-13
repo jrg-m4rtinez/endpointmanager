@@ -86,4 +86,12 @@ describe('migrate', () => {
     await migrate(pool)
     expect((await pool.query('select count(*)::int c from tipo')).rows[0].c).toBe(2)
   })
+
+  it('não roda ALTER TABLE quando tipo_id já existe (evita lock a cada subida)', async () => {
+    await migrate(pool)
+    const sqls = []
+    const spy = { query: (...args) => { sqls.push(String(args[0])); return pool.query(...args) } }
+    await migrate(spy)
+    expect(sqls.some((q) => /ALTER\s+TABLE/i.test(q))).toBe(false)
+  })
 })

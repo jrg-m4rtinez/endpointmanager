@@ -85,6 +85,25 @@ describe('cliente DefectDojo', () => {
     expect(lf.searchParams.get('limit')).toBe('1000')
   })
 
+  it('next com prefixo de caminho no baseUrl não duplica o prefixo', async () => {
+    const seen = []
+    const impl = async url => {
+      const u = new URL(url)
+      seen.push(u.pathname)
+      if (u.pathname === '/dojo/api/v2/url/') {
+        return json(u.searchParams.get('offset') === '5'
+          ? { next: null, results: [{ id: 2, host: 'b.lab' }] }
+          : { next: 'https://outro.host/dojo/api/v2/url/?limit=1000&offset=5', results: [{ id: 1, host: 'a.lab' }] })
+      }
+      if (u.pathname.startsWith('/dojo/api/v2/')) return json({ next: null, results: [] })
+      return json({}, 404)
+    }
+    const c = createDefectDojoClient({ baseUrl: 'https://dojo.real/dojo/', apiKey: 'k', fetchImpl: impl })
+    const hosts = await c.listHosts()
+    expect(hosts.map(h => h.host)).toEqual(['a.lab', 'b.lab'])
+    expect(seen.some(p => p.startsWith('/dojo/dojo'))).toBe(false)
+  })
+
   it('normaliza caixa/espaço do host', async () => {
     const custom = async url => {
       const u = new URL(url)

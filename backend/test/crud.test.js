@@ -79,7 +79,7 @@ describe('endpoints', () => {
     const d = (await post(a, '/departamentos', { nome: 'TI' })).body
     const t = (await post(a, '/tipos', { nome: 'Servidor X' })).body
     const c = await post(a, '/endpoints', {
-      endpoint: '  Host.Lab.local ',
+      endpoint: ' DB01.Infra.LAB ',
       criticidade: 3,
       departamento_id: d.id,
       tipo_id: t.id,
@@ -88,7 +88,7 @@ describe('endpoints', () => {
     const l = await a.get('/endpoints')
     expect(l.body).toHaveLength(1)
     expect(l.body[0]).toMatchObject({
-      endpoint: 'Host.Lab.local',
+      endpoint: 'db01.infra.lab',
       criticidade: 3,
       departamento_id: d.id,
       departamento_nome: 'TI',
@@ -96,10 +96,11 @@ describe('endpoints', () => {
       tipo_nome: 'Servidor X',
     })
     expect(l.body[0].created_at).toBeTruthy()
-    const p = await put(a, `/endpoints/${c.body.id}`, { endpoint: 'h2', criticidade: 1, departamento_id: '', tipo_id: null })
+    const p = await put(a, `/endpoints/${c.body.id}`, { endpoint: '  H2.Infra.LAB ', criticidade: 1, departamento_id: '', tipo_id: null })
     expect(p.status).toBe(200)
+    expect(p.body.endpoint).toBe('h2.infra.lab')
     const l2 = await a.get('/endpoints')
-    expect(l2.body[0]).toMatchObject({ endpoint: 'h2', departamento_id: null, tipo_id: null, tipo_nome: null })
+    expect(l2.body[0]).toMatchObject({ endpoint: 'h2.infra.lab',departamento_id: null, tipo_id: null, tipo_nome: null })
     expect((await put(a, '/endpoints/99999', { endpoint: 'x', criticidade: 1 })).status).toBe(404)
     expect((await del(a, '/endpoints/99999')).status).toBe(404)
     expect((await del(a, `/endpoints/${c.body.id}`)).status).toBe(204)

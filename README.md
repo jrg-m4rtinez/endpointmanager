@@ -157,7 +157,7 @@ Mais a tabela de sessão `em_sessao` (`connect-pg-simple`). Se `tipo` estiver va
 | `leitor` | Ler tudo (Endpoints, Não classificados, Departamentos, Tipos). Não edita. Não vê Acessos. |
 | `admin` | Tudo do leitor, mais criar, editar e remover, classificar e ignorar hosts, e trocar papéis na aba Acessos. |
 
-Regras da API: sem sessão devolve 401. GET exige `leitor` ou `admin`. POST, PUT e DELETE exigem `admin` e o header `X-Requested-With: XMLHttpRequest`. O sistema impede rebaixar o último admin. O e-mail do primeiro login igual a `BOOTSTRAP_ADMIN_EMAIL` vira admin automaticamente. O e-mail vem do claim `email`, ou de `preferred_username` quando `email` não existe. E-mail com `email_verified: false` é descartado.
+Regras da API: sem sessão devolve 401. GET exige `leitor` ou `admin`. POST, PUT e DELETE exigem `admin` e o header `X-Requested-With: XMLHttpRequest`. O sistema impede rebaixar o último admin. `BOOTSTRAP_ADMIN_EMAIL` só concede o primeiro admin: quem loga com esse e-mail vira admin apenas enquanto não existe nenhum admin no banco (rebaixar essa conta depois vale de verdade). Recomenda-se remover a variável do `.env` após o primeiro acesso. O e-mail vem do claim `email`, ou de `preferred_username` quando `email` não existe. E-mail com `email_verified: false` é descartado.
 
 ## Testes
 

@@ -11,6 +11,7 @@ Passo a passo para subir o Endpoint Manager v2 na sua rede. Execute em ordem. Tr
 | `<URL_APP>` | URL pública do app, com `https://` e sem barra final (ex.: `https://endpoints.suaempresa.com`) |
 | `<URL_DEFECTDOJO>` | URL do DefectDojo, sem barra final |
 | `<TENANT_ID>` | Directory (tenant) ID do Entra ID |
+| `<GRAFANA_USER>` | usuário Postgres que a fonte de dados do Grafana usa (só leitura) |
 
 **Regra de ouro:** produção usa **somente** `docker-compose.yml`. Nunca use `docker-compose.lab.yml` (ele sobe Keycloak e usuários de teste).
 
@@ -152,7 +153,8 @@ PG_DATABASE=<PG_DATABASE>
 APP_BASE_URL=<URL_APP>
 # Obrigatório. Gere com: openssl rand -hex 32
 SESSION_SECRET=<SAIDA_DO_OPENSSL_RAND>
-# E-mail que vira admin no primeiro login. Tem que ser o e-mail (ou UPN) da sua conta no Entra.
+# Concede só o PRIMEIRO admin: vale apenas enquanto não existe nenhum admin no banco.
+# Tem que ser o e-mail (ou UPN) da sua conta no Entra. Remova após o primeiro acesso (passo 9).
 BOOTSTRAP_ADMIN_EMAIL=<seu e-mail do Entra>
 
 # --- OIDC (Entra ID) ---
@@ -185,9 +187,22 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+        # Não classificados com atualização força a leitura completa do DefectDojo.
+        proxy_read_timeout 120s;
     }
 }
 ```
+
+Se o proxy roda **no mesmo host** do app, publique a porta só em loopback para ninguém acessar o app em HTTP puro. Crie `docker-compose.override.yml` (o Compose o lê automaticamente junto com o `docker-compose.yml`):
+
+```yaml
+services:
+  frontend:
+    ports: !override
+      - "127.0.0.1:3000:80"
+```
+
+O `!override` exige Docker Compose 2.24 ou superior; sem ele o Compose somaria as duas portas. Confira com `docker compose port frontend 80`: deve mostrar `127.0.0.1:3000`. E no proxy use `proxy_pass http://127.0.0.1:3000;`. Se o proxy está em **outro host**, mantenha `3000:80` e libere a porta 3000 no firewall **só** para o IP do proxy. Motivo: com `APP_BASE_URL` em `https://` o cookie de sessão é `Secure`. Quem abrir `http://<IP_APP>:3000` direto não recebe o cookie e o login volta em loop.
 
 **Opção B, certificado no nginx do próprio frontend.** Crie `frontend/nginx.tls.conf`. Estes snippets da Opção B **não foram testados** em um ambiente TLS real: valide antes de depender deles.
 
@@ -199,6 +214,7 @@ map $http_x_forwarded_proto $fwd_proto {
 
 server {
     listen 80;
+    server_tokens off;
     return 301 https://$host$request_uri;
 }
 server {
@@ -207,6 +223,11 @@ server {
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     root /usr/share/nginx/html;
     index index.html;
+    server_tokens off;
+
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
 
     location /api/ {
         proxy_pass http://backend:3001/;
@@ -214,6 +235,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 120s;
     }
     location / {
         try_files $uri $uri/ /index.html;
@@ -249,10 +271,18 @@ Sem `-f docker-compose.lab.yml`. O log do backend deve conter `Migrations applie
 
 ## 9. Primeiro acesso
 
-1. Abra `<URL_APP>` e entre pelo Entra com a conta cujo e-mail é o `BOOTSTRAP_ADMIN_EMAIL`. Você entra como **admin**.
+1. Abra `<URL_APP>` e entre pelo Entra com a conta cujo e-mail é o `BOOTSTRAP_ADMIN_EMAIL`. Você entra como **admin**. O bootstrap só concede o **primeiro** admin: enquanto já existir algum admin no banco, ninguém mais é promovido por ele, nem a própria conta depois de rebaixada.
 2. Abra a aba **Acessos**. Cada pessoa que logar aparece como `pendente`. Troque o papel para `leitor` ou `admin`.
-3. Confira o rodapé do menu: banco online e DefectDojo alcançável.
-4. Abra **Não classificados** e confirme que a lista carrega.
+3. Recomendado: apague a linha `BOOTSTRAP_ADMIN_EMAIL` do `.env` e rode `docker compose up -d`. Daqui em diante os admins são definidos só pela aba **Acessos**.
+4. Confira o rodapé do menu: banco online e DefectDojo alcançável.
+5. Abra **Não classificados** e confirme que a lista carrega.
+6. Meça quanto demora a leitura completa do DefectDojo. Na aba **Não classificados**, clique em **Atualizar** e cronometre. Ou, no terminal, copie o valor do cookie `em.sid` do navegador (DevTools, Application, Cookies) e rode:
+
+   ```bash
+   time curl -s -o /dev/null -w '%{http_code}\n' -b 'em.sid=<VALOR_DO_COOKIE>' '<URL_APP>/api/nao-classificados?atualizar=1'
+   ```
+
+   O nginx do frontend corta a resposta em **120 s** (`proxy_read_timeout`), e devolve 504. Se o tempo passar de uns 60 s, aumente `proxy_read_timeout` em `frontend/nginx.conf` (e no proxy externo, se houver) e rode `docker compose up -d --build frontend`. Se já estiver perto de 120 s, também vale reduzir o volume no DefectDojo (URLs antigas sem findings) ou verificar a latência entre o app e o DefectDojo.
 
 ## 10. Grafana: conferir que continua lendo
 
@@ -267,7 +297,13 @@ ORDER BY ordinal_position;
 
 Abra os dashboards do Grafana: devem carregar iguais. As consultas que já existiam continuam válidas.
 
-Opcional, para usar o tipo nos painéis:
+Opcional, para usar o tipo nos painéis. Se o Grafana conecta com um usuário só de leitura, dê acesso à tabela nova `tipo` antes (como `<PG_USER_DONO>` ou superusuário):
+
+```sql
+GRANT SELECT ON tipo TO <GRAFANA_USER>;
+```
+
+As outras tabelas novas (`usuario`, `endpoint_ignorado`, `em_sessao`) são internas do app: o Grafana não precisa de acesso a elas.
 
 ```sql
 SELECT e.endpoint, e.criticidade, d.nome AS departamento, t.nome AS tipo
@@ -299,6 +335,7 @@ pg_restore -h <IP_BANCO> -U <PG_USER_DONO> -d <PG_DATABASE> --clean --if-exists 
 | Admin não reconhecido, e-mail vazio | O token veio sem claim `email` e o app usou `preferred_username` (UPN). Adicione o optional claim `email` (passo 4.5) ou ponha o UPN em `BOOTSTRAP_ADMIN_EMAIL`. E-mail com `email_verified: false` é descartado. Depois de corrigir, saia e entre de novo. |
 | `ECONNREFUSED` ou timeout no banco | Firewall, `pg_hba.conf` ou `listen_addresses` (passos 2 e 3). Repita o teste do `psql` do passo 2.6. `no pg_hba.conf entry` significa linha ausente ou IP errado. |
 | `permission denied for schema public` na migração | `PG_USER` sem `CREATE` no schema `public`. Veja o passo 2.5 (`GRANT CREATE ON SCHEMA public ...`). |
+| Erro no **primeiro login** (500 ou volta para `/?erro=login`), log com `permission denied` em `em_sessao` | A tabela de sessão `em_sessao` não é criada na migração: o `connect-pg-simple` a cria no primeiro login. Por isso a falta de `CREATE` no schema `public` pode passar pela subida e só aparecer ao logar. Mesma solução do passo 2.5. |
 | `must be owner of table departamento_endpoint` na migração | `PG_USER` não é dono. Veja o passo 2.5. |
 | Aba Não classificados dá 502 | `DD_URL` ou `DD_API_KEY` errados, DefectDojo fora do ar, ou sem rota/firewall (passo 3). Teste: `curl -H "Authorization: Token <DD_API_KEY>" "<URL_DEFECTDOJO>/api/v2/url/?limit=1"`. |
 | Volta para o login em loop | `APP_BASE_URL` com `https://` mas o acesso real é HTTP, ou o proxy externo não manda `X-Forwarded-Proto: https`. O nginx do frontend repassa o valor recebido quando é `https`; sem ele, repassa `http` e o backend não grava o cookie `Secure`. Confira o header no proxy. |

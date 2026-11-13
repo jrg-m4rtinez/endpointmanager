@@ -13,6 +13,7 @@ const { statsRouter } = require('./routes/stats')
 
 function createApp({ pool, ddClient, oidc, config }) {
   const app = express()
+  app.disable('x-powered-by')
   if (config.secureCookies) app.set('trust proxy', 1)
   app.locals.pool = pool
   app.use(express.json())

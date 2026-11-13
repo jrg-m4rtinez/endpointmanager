@@ -15,6 +15,12 @@ function createDefectDojoClient({
   baseUrl, apiKey, fetchImpl = fetch, ttlMs = 60000, timeoutMs = 10000, now = Date.now,
 }) {
   const base = String(baseUrl || '').replace(/\/+$/, '')
+  let basePath = ''
+  try {
+    basePath = new URL(base).pathname.replace(/\/+$/, '')
+  } catch {
+    basePath = ''
+  }
   let cache = null // { at, data }
   let inflight = null
 
@@ -51,7 +57,10 @@ function createDefectDojoClient({
       if (page.next) {
         // só pathname+search: atrás de proxy o DefectDojo pode devolver outra origem
         const u = new URL(page.next, 'http://x')
-        next = u.pathname + u.search
+        // baseUrl com prefixo (ex.: https://host/dojo): o next já traz /dojo/...; não duplica.
+        let p = u.pathname
+        if (basePath && (p === basePath || p.startsWith(basePath + '/'))) p = p.slice(basePath.length)
+        next = p + u.search
       } else {
         next = null
       }

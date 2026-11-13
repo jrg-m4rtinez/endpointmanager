@@ -4,11 +4,11 @@ import { createApp } from '../../src/app'
 import { migrate } from '../../src/migrate'
 import { loadConfig } from '../../src/config'
 
-export async function buildTestApp({ ddClient = null, bootstrapAdminEmail } = {}) {
+export async function buildTestApp({ ddClient = null, bootstrapAdminEmail, appBaseUrl = 'http://localhost:3000' } = {}) {
   const { pool, drop } = await freshDatabase()
   await migrate(pool)
   const config = loadConfig({
-    APP_BASE_URL: 'http://localhost:3000',
+    APP_BASE_URL: appBaseUrl,
     SESSION_SECRET: 'test-secret',
     BOOTSTRAP_ADMIN_EMAIL: bootstrapAdminEmail,
   })

@@ -20,9 +20,16 @@ async function migrate(pool) {
       nome VARCHAR(255) NOT NULL UNIQUE,
       created_at TIMESTAMP DEFAULT NOW()
     )`)
-  await pool.query(`
-    ALTER TABLE departamento_endpoint
-      ADD COLUMN IF NOT EXISTS tipo_id INTEGER REFERENCES tipo(id) ON DELETE SET NULL`)
+  // ALTER TABLE pega ACCESS EXCLUSIVE mesmo com IF NOT EXISTS: só roda se a coluna faltar.
+  const { rows: tipoCol } = await pool.query(
+    `SELECT 1 FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'departamento_endpoint' AND column_name = 'tipo_id'`
+  )
+  if (!tipoCol.length) {
+    await pool.query(`
+      ALTER TABLE departamento_endpoint
+        ADD COLUMN IF NOT EXISTS tipo_id INTEGER REFERENCES tipo(id) ON DELETE SET NULL`)
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS usuario (
       id SERIAL PRIMARY KEY,

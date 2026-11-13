@@ -311,8 +311,8 @@ export default function NaoClassificados({ user, stats, onChanged }) {
   }
 
   const atualizar = () => {
-    carregar({ atualizar: true })
-    onChanged?.()
+    // Só avisa (ex.: badge de contagem) depois que o cache do DefectDojo foi renovado.
+    carregar({ atualizar: true }).then(() => onChanged?.())
   }
 
   const total = itens?.length ?? 0

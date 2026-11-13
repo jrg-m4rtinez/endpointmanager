@@ -17,7 +17,8 @@ function idOpcional(v) {
 }
 
 function parseBody(body) {
-  const endpoint = textoObrigatorio(body.endpoint, 'endpoint')
+  // Host gravado em minúsculas (comparação com o DefectDojo é sem caixa).
+  const endpoint = textoObrigatorio(body.endpoint, 'endpoint').toLowerCase()
   const { criticidade } = body
   if (!Number.isInteger(criticidade) || criticidade < 1 || criticidade > 4) {
     throw httpError(400, 'criticidade deve ser 1 a 4')

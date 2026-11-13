@@ -45,6 +45,25 @@ describe('auth', () => {
     expect((await agent.get('/auth/me')).body.papel).toBe('admin')
   })
 
+  it('bootstrap rebaixado continua rebaixado se já existe outro admin', async () => {
+    const agent = await setup({ bootstrapAdminEmail: 'admin@lab.local' })
+    await loginAs(agent, { sub: 'a1', email: 'admin@lab.local', name: 'A' })
+    await loginAs(agent, { sub: 'u2', email: 'outro@lab.local', name: 'O' })
+    await ctx.pool.query("UPDATE usuario SET papel='admin' WHERE sub='u2'")
+    await ctx.pool.query("UPDATE usuario SET papel='leitor' WHERE sub='a1'")
+    await loginAs(agent, { sub: 'a1', email: 'admin@lab.local', name: 'A' })
+    expect((await agent.get('/auth/me')).body.papel).toBe('leitor')
+  })
+
+  it('outro sub com o e-mail de bootstrap não vira admin se já existe admin', async () => {
+    const agent = await setup({ bootstrapAdminEmail: 'admin@lab.local' })
+    await loginAs(agent, { sub: 'a1', email: 'admin@lab.local', name: 'A' })
+    await loginAs(agent, { sub: 'evil', email: 'ADMIN@lab.local', name: 'E' })
+    expect((await agent.get('/auth/me')).body.papel).toBe('pendente')
+    const { rows } = await ctx.pool.query("SELECT sub FROM usuario WHERE papel='admin'")
+    expect(rows.map((r) => r.sub)).toEqual(['a1'])
+  })
+
   it('segundo login atualiza nome/email e mantém papel', async () => {
     const agent = await setup()
     await loginAs(agent, { sub: 'u1', email: 'a@lab.local', name: 'A' })
@@ -94,6 +113,36 @@ describe('auth', () => {
     const cookie = res.headers['set-cookie'].find((c) => c.startsWith('em.sid='))
     expect(cookie).toMatch(/HttpOnly/i)
     expect(cookie).toMatch(/SameSite=Lax/i)
+  })
+})
+
+describe('cookie em produção (APP_BASE_URL https)', () => {
+  const PROD = { appBaseUrl: 'https://em.exemplo.com' }
+  const sid = (res) => (res.headers['set-cookie'] || []).find((c) => c.startsWith('em.sid='))
+
+  it('com X-Forwarded-Proto: https → Set-Cookie com Secure', async () => {
+    await setup(PROD)
+    // O cookie jar do supertest não reenvia cookie Secure por http: repassa à mão.
+    const l = await request(ctx.app).get('/auth/login').set('X-Forwarded-Proto', 'https')
+    expect(sid(l)).toMatch(/;\s*Secure/i)
+    const qs = new URLSearchParams({ sub: 'u1', email: 'a@lab.local', name: 'A' }).toString()
+    const res = await request(ctx.app)
+      .get(`/auth/callback?${qs}`)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', sid(l).split(';')[0])
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toBe('https://em.exemplo.com/')
+    expect(sid(res)).toBeTruthy()
+    expect(sid(res)).toMatch(/;\s*Secure/i)
+  })
+
+  it('sem X-Forwarded-Proto → nenhum cookie de sessão', async () => {
+    const agent = await setup(PROD)
+    const l = await agent.get('/auth/login')
+    expect(l.status).toBe(302)
+    expect(sid(l)).toBeUndefined()
+    const res = await loginAs(agent, { sub: 'u1', email: 'a@lab.local', name: 'A' })
+    expect(sid(res)).toBeUndefined()
   })
 })
 

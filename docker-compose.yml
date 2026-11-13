@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    container_name: endpoint-manager-api
+    ports:
+      - "3001:3001"
+    environment:
+      - PG_HOST=10.10.10.118
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_USER=defectdojo
+      - PG_PASSWORD=defectdojo
+      - PG_DATABASE=defectdojo
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: endpoint-manager-ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

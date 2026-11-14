@@ -121,6 +121,8 @@ scp <USUARIO_SSH>@<IP_SERVIDOR>:backup-antes-v2.dump .
 
 **O que deve aparecer:** uma linha com o nome do arquivo, o tamanho e `100%`. Guarde esse arquivo em lugar seguro: ele contém todos os dados.
 
+Depois de confirmar que a cópia chegou ao seu computador, **apague o arquivo do servidor** (`rm backup-antes-v2.dump`) ou mova-o para um local protegido: ele contém todos os dados do banco.
+
 **Se der errado:**
 - `server version mismatch` ou `aborting because of server version mismatch`: o `pg_dump` é mais antigo que o banco. Use a alternativa com `docker run` trocando `16` pela versão do banco (por exemplo `15` ou `17`).
 - `password authentication failed`: senha ou usuário errados.
@@ -197,10 +199,9 @@ docker compose down
 cd /opt
 git clone https://github.com/jrg-m4rtinez/endpointmanager.git endpoint-manager-v2
 cd endpoint-manager-v2
-git checkout feat/login-local
 ```
 
-> Se a v2 já foi unida à branch principal (`main`) quando você ler isto, pule a linha do `git checkout`. Em caso de dúvida, pergunte a quem mantém o repositório qual branch usar.
+> Isto baixa a branch principal (`main`), que já traz o login local. Se quem mantém o repositório indicar outra branch, rode `git checkout <BRANCH>` depois do `cd`.
 
 **Alternativa sem `git`:** no navegador, abra https://github.com/jrg-m4rtinez/endpointmanager, clique em **Code, Download ZIP**, envie o ZIP para o servidor (`scp`), e rode:
 
@@ -394,10 +395,10 @@ O `.env.example` traz valores do **ambiente de teste** (lab). Eles **não** pode
 ### Conferir o arquivo
 
 ```bash
-grep -n -E "lab|host.docker.internal|localhost|POSTGRES_" .env
+grep -v "^#" .env | grep -n -E "POSTGRES_|lab.local|lab-secret|host.docker.internal|localhost|^PG_HOST=db$|^PG_(USER|PASSWORD|DATABASE)=endpoint$"
 ```
 
-**O que deve aparecer:** **nada** (nenhuma linha). Se aparecer alguma linha, ainda sobrou valor de teste: volte ao `nano` e corrija.
+**O que deve aparecer:** **nada** (nenhuma linha). O comando ignora as linhas de comentário (que começam com `#`) e procura só valores de teste do lab. Se aparecer alguma linha, ainda sobrou valor de teste: edite **só aquela linha** no `nano` e rode o comando de novo.
 
 Proteja o arquivo para que só você o leia:
 
@@ -622,6 +623,12 @@ docker compose exec backend node scripts/criar-admin-local.js socorro@suaempresa
 Admin local socorro@suaempresa.com criado.
 Senha temporária: <16 caracteres>
 Entre com ela; é preciso trocar a senha no primeiro login (o sistema vai exigir).
+```
+
+Se o e-mail já era de um usuário local, aparece no lugar da primeira linha:
+
+```
+Usuário local socorro@suaempresa.com já existia: senha redefinida e papel admin garantido.
 ```
 
 Entre em `<URL_APP>` pelo formulário de e-mail e senha, com essa senha temporária, e crie a sua senha nova.

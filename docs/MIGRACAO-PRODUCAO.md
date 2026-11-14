@@ -381,9 +381,9 @@ Troque cada valor por um do seu ambiente. Os nomes à esquerda são exatos.
 | `DD_URL` | Endereço do DefectDojo | `<URL_DEFECTDOJO>` | `https://defectdojo.suaempresa.com` |
 | `DD_API_KEY` | Chave de leitura do DefectDojo | Passo 8 | `<CHAVE_DO_DEFECTDOJO>` |
 | `LOGIN_LOCAL` | Liga ou desliga o login por usuário e senha. Opcional. Valores: `ligado` (o padrão) ou `desligado` | Sua decisão. Pode deixar fora do arquivo | `ligado` |
-| `TRUST_PROXY` | Quantos proxies existem à frente do app. Opcional, padrão `1` (só o nginx do próprio app) | Só mude se houver outro balanceador na frente do nginx | `1` |
+| `TRUST_PROXY` | Quantos proxies existem à frente do app. Opcional, padrão `1` (só o nginx do próprio app) | Depende da opção de HTTPS do passo 10: **Opção A** (proxy HTTPS da empresa na frente) → `2`. **Opção B** (certificado no nginx do próprio app) → `1` | `2` |
 
-Nota sobre `TRUST_PROXY`: o app acessa o IP de quem chama pelo proxy. Se houver um segundo proxy (por exemplo um balanceador da empresa) à frente do nginx do app, use `2`, senão o limite de tentativas por IP vê o IP errado.
+Nota sobre `TRUST_PROXY`: se você vai usar a **Opção A** de HTTPS (passo 10), há um proxy da empresa na frente do nginx do app: **troque a linha `TRUST_PROXY=1` por `TRUST_PROXY=2`** no `.env`. Na **Opção B** deixe `1` (ou sem a linha). Por que importa: com o valor errado, todo mundo aparece com o mesmo IP no limite de tentativas (e uma pessoa bloqueia todas), ou então um cliente consegue forjar o próprio IP e escapar do limite.
 
 ### Apagar o que é do lab
 
@@ -407,7 +407,7 @@ chmod 600 .env
 ```
 
 **Se der errado:**
-- O `grep` mostrou linhas com `lab` ou `host.docker.internal`: corrija essas linhas.
+- O `grep` mostrou alguma linha (valor de teste do lab, `host.docker.internal`, `localhost`, `PG_HOST=db`, `POSTGRES_*` ou `PG_*` de teste): edite só aquela linha no `nano` e rode o comando de novo, até não aparecer nada.
 - Apertou `Ctrl+X` e perguntou "Save modified buffer?": aperte `Y` e depois `Enter`.
 - Se faltar alguma variável obrigatória, o app **não sobe** e o log diz quais faltam (passo 11).
 
@@ -419,12 +419,12 @@ O app acessível em `http://...` (sem cadeado) faz o login **voltar para a tela 
 
 **Qual opção escolher:**
 
-- **Opção A, recomendada:** a sua empresa já tem um servidor que cuida de HTTPS (nginx, Traefik, HAProxy, balanceador). Peça à rede para apontá-lo para `http://<IP_SERVIDOR>:3000`. O proxy da empresa cuida do certificado e repassa o tráfego ao app. Os detalhes técnicos que a equipe de rede precisa estão em [PRODUCAO.md, seção 7, Opção A](PRODUCAO.md) (incluindo os cabeçalhos `Host` e `X-Forwarded-Proto: https`).
+- **Opção A, recomendada:** a sua empresa já tem um servidor que cuida de HTTPS (nginx, Traefik, HAProxy, balanceador). Peça à rede para apontá-lo para `http://<IP_SERVIDOR>:3000`. O proxy da empresa cuida do certificado e repassa o tráfego ao app. Os detalhes técnicos que a equipe de rede precisa estão em [PRODUCAO.md, seção 7, Opção A](PRODUCAO.md) (incluindo os cabeçalhos `Host`, `X-Forwarded-For` e `X-Forwarded-Proto: https`). **Com a Opção A, ajuste `TRUST_PROXY=2` no `.env` (passo 9).**
 - **Opção B:** colocar o certificado no nginx do próprio app. Só se não houver proxy da empresa. Veja [PRODUCAO.md, seção 7, Opção B](PRODUCAO.md). Ela não foi testada em ambiente real: use só com ajuda técnica.
 
 Importante para quem cuida da rede:
 - O **backend nunca deve ser exposto diretamente**. Ele só é acessado pelo nginx do app (o serviço `frontend`). Só a porta 3000 (do `frontend`) é publicada, e o ideal é que **só o seu proxy** a alcance (veja PRODUCAO.md, seção 7).
-- Se houver outro balanceador na frente do nginx, ajuste `TRUST_PROXY` no `.env` (passo 9).
+- `TRUST_PROXY` no `.env` depende da opção escolhida: **Opção A** (proxy da empresa na frente) → `TRUST_PROXY=2`; **Opção B** (certificado no nginx do app) → `1`. Valor errado faz todos dividirem um único IP no limite de tentativas, ou deixa clientes forjarem o IP.
 
 **Teste** (do seu computador, depois que o app estiver no ar, passo 11):
 
@@ -563,7 +563,9 @@ Na linha da pessoa (só aparece em quem é **Local**, e não na sua própria lin
 
 ### O que acontece com as sessões abertas
 
-Trocar ou redefinir a senha **não derruba** as sessões que a pessoa já tem abertas (por exemplo, no celular). Cada sessão dura até 8 horas e só termina quando expira ou quando a pessoa sai.
+**Trocar** a própria senha **não derruba** as sessões que a pessoa já tem abertas (por exemplo, no celular). Cada sessão dura até 8 horas e só termina quando expira ou quando a pessoa sai.
+
+**Redefinir** a senha (admin) não apaga as sessões, mas **as bloqueia**: a redefinição marca a conta como "precisa trocar a senha", e o app lê essa marca no banco a cada requisição. Enquanto a nova senha não for definida, qualquer sessão aberta dessa conta recebe 403 em todas as telas de dados. Atenção: assim que a senha for trocada, a marca sai e uma sessão antiga que ainda esteja aberta volta a funcionar. Por isso, se a suspeita é de roubo de sessão, combine a redefinição com uma das formas abaixo.
 
 Se você suspeita que a sessão de alguém foi roubada, existem duas formas de forçar **todo mundo** a entrar de novo:
 
@@ -581,7 +583,7 @@ Não há botão no app que derrube só as sessões de uma pessoa.
 ### Bloqueio e limites (para você saber)
 
 - 5 senhas erradas seguidas bloqueiam **aquela conta** por 15 minutos. Enquanto estiver bloqueada, até a senha certa falha, sem avisar o motivo.
-- Cada endereço IP pode tentar no máximo 20 vezes por 15 minutos; passou disso, o app responde que há tentativas demais.
+- Cada endereço IP pode errar no máximo 20 vezes por 15 minutos (só tentativas que falharam contam; logins certos não); passou disso, o app responde que há tentativas demais.
 - A mensagem de erro de login é sempre a mesma ("credenciais inválidas"), mesmo se o e-mail não existir. Isso é proposital, por segurança.
 
 ### Dar acesso a quem entrou pela Microsoft
@@ -594,7 +596,7 @@ Se alguém tem um usuário **local** e depois entra pelo botão **Microsoft** co
 
 ### Desligar o login local
 
-Para quem não vai usar: coloque `LOGIN_LOCAL=desligado` no `.env` e rode `docker compose up -d`. O formulário de e-mail e senha some da tela de entrada e as rotas locais deixam de existir. Usuários locais já criados ficam guardados, mas **não conseguem entrar** enquanto estiver desligado.
+Para quem não vai usar: coloque `LOGIN_LOCAL=desligado` no `.env` e rode `docker compose up -d`. O formulário de e-mail e senha some da tela de entrada e as rotas locais deixam de existir. Usuários locais já criados ficam guardados, mas **não conseguem entrar** enquanto estiver desligado, e as sessões locais que estavam abertas também são encerradas (respondem como não autenticadas).
 
 **Se der errado:**
 - Mensagem de e-mail já em uso: já existe uma conta com esse e-mail (local ou Microsoft, sem diferenciar maiúsculas).
@@ -639,7 +641,7 @@ O que o comando faz, conforme o caso:
 - E-mail **é de alguém que entra pela Microsoft**: **recusa**, com a mensagem `O e-mail ... pertence a um usuário SSO...`. Use outro e-mail.
 
 **Atenção:**
-- O comando **ignora** a configuração `LOGIN_LOCAL=desligado`: ele cria o admin mesmo assim, mas **esse admin não consegue entrar** enquanto o login local estiver desligado, e o comando não avisa disso. Se for o caso, mude para `LOGIN_LOCAL=ligado` no `.env` (ou apague a linha) e rode `docker compose up -d`.
+- Com `LOGIN_LOCAL=desligado`, o comando cria o admin mesmo assim, mas **esse admin não consegue entrar** enquanto o login local estiver desligado, e o comando **avisa** com uma linha `Atenção: LOGIN_LOCAL=desligado...`. Se for o caso, mude para `LOGIN_LOCAL=ligado` no `.env` (ou apague a linha) e rode `docker compose up -d`.
 - A senha temporária aparece **na tela do terminal**: não deixe ninguém olhando e não a cole em chats.
 
 **Se der errado:**
@@ -727,9 +729,9 @@ pg_restore -h <IP_BANCO> -U <PG_USER_DONO> -d <PG_DATABASE> --clean --if-exists 
 | O login Microsoft parou de funcionar depois de meses | O secret do Entra expirou. Crie outro (passo 7.9), troque o `OIDC_CLIENT_SECRET` no `.env` e rode `docker compose up -d`. Enquanto isso, quem tem usuário local ou o admin de emergência (passo 14) continua entrando. |
 | **Esqueci a senha do usuário local** | Um admin abre **Acessos**, clica em **Redefinir senha** na linha da pessoa e entrega a nova senha temporária (passo 13). Se o **único admin** esqueceu a senha, use o comando do passo 14 com o e-mail dele: ele redefine a senha e mantém o papel de admin. |
 | **Conta bloqueada** (a pessoa digita a senha certa e não entra) | Foram 5 senhas erradas seguidas e a conta ficou bloqueada por 15 minutos. Tem duas saídas: esperar 15 minutos, ou um admin clicar em **Redefinir senha** em **Acessos** (isso também desbloqueia e gera nova senha temporária). O app não avisa que a conta está bloqueada, de propósito: a mensagem é sempre a mesma. |
-| O app diz que há **tentativas demais** | Esse endereço IP passou de 20 tentativas em 15 minutos. Espere 15 minutos. Se muitas pessoas da empresa aparecem "no mesmo IP" (por causa de um proxy ou balanceador), ajuste `TRUST_PROXY` (passo 9). |
+| O app diz que há **tentativas demais** | Esse endereço IP passou de 20 tentativas que falharam em 15 minutos. Espere 15 minutos. Se muitas pessoas da empresa aparecem "no mesmo IP" (por causa de um proxy ou balanceador), ajuste `TRUST_PROXY` (passo 9). |
 | A pessoa precisa trocar a senha e não consegue | A senha nova precisa ter **pelo menos 12 caracteres** e ser diferente da atual (a temporária). |
-| Suspeita de que alguém usa a sessão de outra pessoa | Trocar a senha **não** derruba sessões abertas (valem até 8h). Veja a seção 13, "O que acontece com as sessões abertas". |
+| Suspeita de que alguém usa a sessão de outra pessoa | Trocar a senha **não** derruba sessões abertas (valem até 8h); redefinir pelo admin as bloqueia até a nova senha ser definida. Veja a seção 13, "O que acontece com as sessões abertas". |
 
 ## 18. Glossário curto
 

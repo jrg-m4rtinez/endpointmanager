@@ -65,6 +65,14 @@ describe('POST /usuarios (criar local)', () => {
     expect((await criar(admin, { nome: 'S', email: 'sam@sus.com', papel: 'leitor' })).status).toBe(201)
   })
 
+  it('limita nome (255) e e-mail (254) → 400; nos limites passa', async () => {
+    const admin = await setup()
+    expect((await criar(admin, { nome: 'N'.repeat(256), email: 'a@x.com', papel: 'leitor' })).status).toBe(400)
+    const longo = 'a'.repeat(250) + '@x.co' // 255
+    expect((await criar(admin, { nome: 'A', email: longo, papel: 'leitor' })).status).toBe(400)
+    expect((await criar(admin, { nome: 'N'.repeat(255), email: 'b'.repeat(249) + '@x.co', papel: 'leitor' })).status).toBe(201)
+  })
+
   it('email já existe (SSO, outra caixa) → 409 email_em_uso; local duplicado também', async () => {
     const admin = await setup()
     await loginAs(request.agent(ctx.app), { sub: 'sso1', email: 'Bia@X.com', name: 'Bia' })
@@ -151,7 +159,7 @@ describe('papel e listagem', () => {
 })
 
 describe('script criar-admin-local', () => {
-  function rodar(args) {
+  function rodar(args, extraEnv = {}) {
     const u = new URL(ctx.url)
     const env = {
       PATH: process.env.PATH,
@@ -161,6 +169,7 @@ describe('script criar-admin-local', () => {
       PG_USER: decodeURIComponent(u.username),
       PG_PASSWORD: decodeURIComponent(u.password),
       PG_DATABASE: u.pathname.slice(1),
+      ...extraEnv,
     }
     return run(process.execPath, [SCRIPT, ...args], { env }).then(
       (r) => ({ code: 0, ...r }),
@@ -195,6 +204,18 @@ describe('script criar-admin-local', () => {
     const d = await rodar([])
     expect(d.code).toBe(1)
     expect(d.stderr).toMatch(/Uso/)
+  }, 30000)
+
+  it('LOGIN_LOCAL=desligado: avisa no console, mas cria o admin; ligado não avisa', async () => {
+    await setup()
+    const a = await rodar(['off@x.com', 'Off'], { LOGIN_LOCAL: 'desligado' })
+    expect(a.code).toBe(0)
+    expect(a.stderr).toMatch(/LOGIN_LOCAL=desligado/)
+    const { rows } = await ctx.pool.query("SELECT papel, origem FROM usuario WHERE email = 'off@x.com'")
+    expect(rows).toEqual([{ papel: 'admin', origem: 'local' }])
+    const b = await rodar(['on@x.com', 'On'])
+    expect(b.code).toBe(0)
+    expect(b.stderr).not.toMatch(/LOGIN_LOCAL/)
   }, 30000)
 })
 

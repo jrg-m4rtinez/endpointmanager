@@ -55,10 +55,11 @@ function authRouter({ pool, oidc, config }) {
   } else {
     const hashFicticio = criarHashFicticio()
     hashFicticio.catch(() => {}) // falha aparece no login (verify), não como rejeição não tratada
-    // Limite por IP (por instância do app). Conta login e troca de senha juntos.
+    // Limite por IP (por instância do app). Conta só as falhas de login e de troca de senha, juntas.
     const limiteLocal = rateLimit({
       windowMs: 15 * 60 * 1000,
       limit: 20,
+      skipSuccessfulRequests: true, // só tentativas que falharam contam
       standardHeaders: 'draft-8',
       legacyHeaders: false,
       handler: (req, res) => res.status(429).json({ error: 'muitas_tentativas' }),

@@ -176,6 +176,28 @@ describe('login local', () => {
     expect(r.body).toEqual({ error: 'muitas_tentativas' })
   })
 
+  it('logins bem-sucedidos não gastam a cota por IP; as falhas ainda disparam 429', async () => {
+    const agent = await setup()
+    await criarLocal(ctx.pool, { email: 'ana@x.com' })
+    for (let i = 0; i < 25; i++) expect((await login(agent, 'ana@x.com', SENHA)).status).toBe(200)
+    for (let i = 0; i < 20; i++) expect((await login(agent, 'ana@x.com', 'errada-errada')).status).toBe(401)
+    expect((await login(agent, 'ana@x.com', 'errada-errada')).status).toBe(429)
+  }, 30000)
+
+  it('LOGIN_LOCAL desligado encerra sessão local aberta (401); SSO segue valendo', async () => {
+    const agent = await setup()
+    await criarLocal(ctx.pool, { email: 'ana@x.com' })
+    expect((await login(agent, 'ana@x.com', SENHA)).status).toBe(200)
+    expect((await agent.get('/auth/me')).status).toBe(200)
+    const sso = request.agent(ctx.app)
+    await loginAs(sso, { sub: 's1', email: 's1@x.com', name: 'S' })
+    ctx.app.locals.config.loginLocal = false
+    const me = await agent.get('/auth/me')
+    expect(me.status).toBe(401)
+    expect(me.body).toEqual({ error: 'nao_autenticado' })
+    expect((await sso.get('/auth/me')).status).toBe(200)
+  })
+
   it('limite por IP é por instância do app (testes isolados)', async () => {
     const agent = await setup()
     await criarLocal(ctx.pool, { email: 'ana@x.com' })

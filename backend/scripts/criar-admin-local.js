@@ -12,7 +12,11 @@ async function main() {
   if (!email || !nome || !/^[^\s@]+@[^\s@]+$/.test(email)) {
     throw new Error('Uso: node scripts/criar-admin-local.js <email> "<nome>" (informe um e-mail válido e o nome)')
   }
-  const pool = createPool(loadConfig(process.env))
+  const config = loadConfig(process.env)
+  if (!config.loginLocal) {
+    console.warn('Atenção: LOGIN_LOCAL=desligado. O admin será criado, mas não consegue entrar pelo login local enquanto estiver desligado.')
+  }
+  const pool = createPool(config)
   try {
     await migrate(pool)
     const { rows } = await pool.query(

@@ -26,6 +26,8 @@ function usuariosRouter() {
     const nomeOk = typeof nome === 'string' ? nome.trim() : ''
     const emailOk = typeof email === 'string' ? email.trim() : ''
     if (!nomeOk) throw httpError(400, 'Informe o nome')
+    if (nomeOk.length > 255) throw httpError(400, 'Nome muito longo (máximo 255 caracteres)')
+    if (emailOk.length > 254) throw httpError(400, 'E-mail muito longo (máximo 254 caracteres)')
     if (!EMAIL_RE.test(emailOk)) throw httpError(400, 'Informe um e-mail válido')
     if (!PAPEIS.includes(papel)) throw httpError(400, 'Papel inválido')
 

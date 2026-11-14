@@ -170,7 +170,7 @@ DD_API_KEY=<API_KEY_DO_USUARIO_READER>
 Opcionais:
 
 - `LOGIN_LOCAL=ligado` (padrão) ou `desligado`: liga ou desliga o login por e-mail e senha. Valor diferente de `ligado`/`desligado` faz o backend recusar subir.
-- `TRUST_PROXY=<N>` (inteiro, padrão `1`): quantos proxies confiáveis ficam à frente do backend (o nginx do frontend conta como 1). Se houver outro balanceador na frente do nginx, use `2`; senão o limite de tentativas por IP vê o IP errado. O backend **nunca** deve ser exposto direto, só pelo nginx do frontend.
+- `TRUST_PROXY=<N>` (inteiro, padrão `1`): quantos proxies confiáveis ficam à frente do backend (o nginx do frontend conta como 1). Depende da opção de TLS (seção 7): **Opção A** (proxy da empresa na frente do nginx) → `TRUST_PROXY=2`; **Opção B** (certificado no nginx do próprio frontend) → `1`. Valor errado: todos dividem um único IP no limite de tentativas, ou clientes conseguem forjar o IP. O backend **nunca** deve ser exposto direto, só pelo nginx do frontend.
 
 O backend recusa subir se faltar qualquer uma destas: `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE`, `SESSION_SECRET`, `APP_BASE_URL`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Restrinja o arquivo: `chmod 600 .env`.
 
@@ -178,7 +178,7 @@ O backend recusa subir se faltar qualquer uma destas: `PG_HOST`, `PG_PORT`, `PG_
 
 O app **precisa** ser acessado por `<URL_APP>` (https). Escolha uma opção.
 
-**Opção A, proxy reverso existente (recomendada).** Aponte seu proxy (nginx, Traefik, HAProxy etc.) para `http://<IP_APP>:3000` e termine o TLS nele. O proxy deve repassar `Host` e `X-Forwarded-Proto: https`. O nginx do frontend preserva esse header (usa o `X-Forwarded-Proto` recebido quando for `https`, senão o scheme local), e o backend confia nele para emitir o cookie `Secure`. Exemplo em nginx:
+**Opção A, proxy reverso existente (recomendada).** Aponte seu proxy (nginx, Traefik, HAProxy etc.) para `http://<IP_APP>:3000` e termine o TLS nele. O proxy deve repassar `Host` e `X-Forwarded-Proto: https`, e definir ou acrescentar `X-Forwarded-For` (peça isso à equipe de rede). Com esta opção, use `TRUST_PROXY=2` no `.env` (seção 6). O nginx do frontend preserva esse header (usa o `X-Forwarded-Proto` recebido quando for `https`, senão o scheme local), e o backend confia nele para emitir o cookie `Secure`. Exemplo em nginx:
 
 ```nginx
 server {
@@ -297,11 +297,11 @@ Além do SSO, existe login por e-mail e senha (`LOGIN_LOCAL`, padrão `ligado`).
 docker compose exec backend node scripts/criar-admin-local.js <EMAIL> "<NOME>"
 ```
 
-O script imprime uma senha temporária (troca obrigatória no primeiro login) e recusa e-mails de usuários SSO. Ele ignora `LOGIN_LOCAL=desligado`: com o login local desligado, o admin criado não consegue entrar.
+O script imprime uma senha temporária (troca obrigatória no primeiro login) e recusa e-mails de usuários SSO. Com `LOGIN_LOCAL=desligado` ele cria o admin mesmo assim, mas imprime um aviso: o admin não consegue entrar enquanto o login local estiver desligado (e sessões locais abertas também são encerradas nesse modo).
 
 **Limitação (L10):** se alguém tem uma conta local e depois entra pela Microsoft com o mesmo e-mail, nasce uma conta SSO separada (o `sub` é diferente). O `BOOTSTRAP_ADMIN_EMAIL` só considera contas SSO.
 
-Trocar ou redefinir uma senha não encerra as sessões abertas (valem até 8 horas). Para encerrar todas, apague-as (`DELETE FROM em_sessao;`) ou troque o `SESSION_SECRET` e rode `docker compose up -d`.
+Trocar uma senha não encerra as sessões abertas (valem até 8 horas). Redefinir pelo admin marca `trocar_senha`, e as sessões abertas dessa conta levam 403 nas rotas de dados até a nova senha ser definida (depois disso, voltam a valer). Para encerrar todas, apague-as (`DELETE FROM em_sessao;`) ou troque o `SESSION_SECRET` e rode `docker compose up -d`.
 
 ## 10. Grafana: conferir que continua lendo
 

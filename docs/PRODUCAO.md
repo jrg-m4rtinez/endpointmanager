@@ -167,6 +167,11 @@ DD_URL=<URL_DEFECTDOJO>
 DD_API_KEY=<API_KEY_DO_USUARIO_READER>
 ```
 
+Opcionais:
+
+- `LOGIN_LOCAL=ligado` (padrão) ou `desligado`: liga ou desliga o login por e-mail e senha. Valor diferente de `ligado`/`desligado` faz o backend recusar subir.
+- `TRUST_PROXY=<N>` (inteiro, padrão `1`): quantos proxies confiáveis ficam à frente do backend (o nginx do frontend conta como 1). Se houver outro balanceador na frente do nginx, use `2`; senão o limite de tentativas por IP vê o IP errado. O backend **nunca** deve ser exposto direto, só pelo nginx do frontend.
+
 O backend recusa subir se faltar qualquer uma destas: `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE`, `SESSION_SECRET`, `APP_BASE_URL`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Restrinja o arquivo: `chmod 600 .env`.
 
 ## 7. TLS (HTTPS)
@@ -283,6 +288,20 @@ Sem `-f docker-compose.lab.yml`. O log do backend deve conter `Migrations applie
    ```
 
    O nginx do frontend corta a resposta em **120 s** (`proxy_read_timeout`), e devolve 504. Se o tempo passar de uns 60 s, aumente `proxy_read_timeout` em `frontend/nginx.conf` (e no proxy externo, se houver) e rode `docker compose up -d --build frontend`. Se já estiver perto de 120 s, também vale reduzir o volume no DefectDojo (URLs antigas sem findings) ou verificar a latência entre o app e o DefectDojo.
+
+### Login local e admin de emergência
+
+Além do SSO, existe login por e-mail e senha (`LOGIN_LOCAL`, padrão `ligado`). O admin cria os usuários na aba **Acessos** (veja [MIGRACAO-PRODUCAO.md](MIGRACAO-PRODUCAO.md), seção 13). Se ninguém consegue entrar (Entra fora do ar, secret expirado), crie ou redefina um admin local no servidor:
+
+```bash
+docker compose exec backend node scripts/criar-admin-local.js <EMAIL> "<NOME>"
+```
+
+O script imprime uma senha temporária (troca obrigatória no primeiro login) e recusa e-mails de usuários SSO. Ele ignora `LOGIN_LOCAL=desligado`: com o login local desligado, o admin criado não consegue entrar.
+
+**Limitação (L10):** se alguém tem uma conta local e depois entra pela Microsoft com o mesmo e-mail, nasce uma conta SSO separada (o `sub` é diferente). O `BOOTSTRAP_ADMIN_EMAIL` só considera contas SSO.
+
+Trocar ou redefinir uma senha não encerra as sessões abertas (valem até 8 horas). Para encerrar todas, apague-as (`DELETE FROM em_sessao;`) ou troque o `SESSION_SECRET` e rode `docker compose up -d`.
 
 ## 10. Grafana: conferir que continua lendo
 

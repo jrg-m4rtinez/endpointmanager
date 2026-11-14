@@ -8,7 +8,21 @@ const MENSAGENS = {
   defectdojo_indisponivel: 'O DefectDojo está indisponível no momento. Tente novamente em instantes.',
   defectdojo_nao_configurado: 'A integração com o DefectDojo não está configurada.',
   ultimo_admin: 'Não é possível remover ou rebaixar o último administrador.',
+  credenciais_invalidas: 'E-mail ou senha inválidos.',
+  muitas_tentativas: 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.',
+  trocar_senha: 'Troque sua senha temporária antes de continuar.',
+  senha_atual_incorreta: 'A senha atual está incorreta.',
+  email_em_uso: 'Já existe um usuário com este e-mail.',
+  usuario_sso: 'Este usuário entra com a Microsoft e não tem senha local.',
+  login_local_desligado: 'O login com e-mail e senha está desligado neste servidor.',
 }
+
+// Eventos globais tratados pelo App (quem chamou a API pode estar em qualquer página).
+export const EVENTO_SESSAO_EXPIRADA = 'sessao-expirada'
+export const EVENTO_TROCAR_SENHA = 'trocar-senha'
+
+// O 401 do próprio login local significa "credenciais inválidas", não sessão expirada.
+const ROTA_LOGIN_LOCAL = '/auth/local/login'
 
 export class ApiError extends Error {
   constructor(status, code, message, detalhe) {
@@ -30,10 +44,6 @@ function mensagemPara(status, code) {
   return `Não foi possível concluir a operação (HTTP ${status}).`
 }
 
-export function irParaLogin() {
-  window.location.href = '/api/auth/login'
-}
-
 export async function api(path, { method = 'GET', body } = {}) {
   const headers = { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' }
   const init = { method, credentials: 'same-origin', headers }
@@ -51,12 +61,6 @@ export async function api(path, { method = 'GET', body } = {}) {
 
   if (res.status === 204) return null
 
-  if (res.status === 401) {
-    irParaLogin()
-    // A página está saindo: não resolve para não piscar erros na tela.
-    return new Promise(() => {})
-  }
-
   let data = null
   try {
     data = await res.json()
@@ -66,6 +70,12 @@ export async function api(path, { method = 'GET', body } = {}) {
 
   if (!res.ok) {
     const code = data?.error
+    // 401 → o App mostra a tela de Login; 403 trocar_senha → o App recarrega /auth/me e mostra TrocarSenha.
+    if (res.status === 401 && path !== ROTA_LOGIN_LOCAL) {
+      window.dispatchEvent(new Event(EVENTO_SESSAO_EXPIRADA))
+    } else if (res.status === 403 && code === 'trocar_senha') {
+      window.dispatchEvent(new Event(EVENTO_TROCAR_SENHA))
+    }
     throw new ApiError(res.status, code, mensagemPara(res.status, code), data?.detalhe)
   }
   return data

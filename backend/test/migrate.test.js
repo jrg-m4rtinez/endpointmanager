@@ -87,6 +87,43 @@ describe('migrate', () => {
     expect((await pool.query('select count(*)::int c from tipo')).rows[0].c).toBe(2)
   })
 
+  it('migração idempotente e colunas legadas intactas com as colunas novas', async () => {
+    // usuario como criado pela v2 antes do login local, com uma linha SSO.
+    await pool.query(`
+      CREATE TABLE usuario (
+        id SERIAL PRIMARY KEY,
+        sub VARCHAR UNIQUE NOT NULL,
+        email VARCHAR,
+        nome VARCHAR,
+        papel VARCHAR NOT NULL DEFAULT 'pendente' CHECK (papel IN ('pendente','leitor','admin')),
+        ultimo_login TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )`)
+    await pool.query("INSERT INTO usuario (sub, email, nome, papel) VALUES ('s1', 'a@x', 'A', 'admin')")
+    await createV1Schema(pool)
+    const legadas = ['departamento', 'departamento_endpoint', 'usuario']
+    const before = await columnDefs(pool, legadas)
+    await migrate(pool)
+    await migrate(pool)
+    const novas = ['tipo_id', 'origem', 'senha_hash', 'trocar_senha', 'falhas_login', 'bloqueado_ate']
+    const after = await columnDefs(pool, legadas)
+    expect(after.filter((c) => !novas.includes(c.column_name))).toEqual(before)
+    const defs = Object.fromEntries(
+      after.filter((c) => c.table_name === 'usuario').map((c) => [c.column_name, c])
+    )
+    expect(defs.origem).toMatchObject({ is_nullable: 'NO' })
+    expect(defs.origem.column_default).toMatch(/'sso'/)
+    expect(defs.senha_hash).toMatchObject({ data_type: 'text', is_nullable: 'YES' })
+    expect(defs.trocar_senha).toMatchObject({ data_type: 'boolean', is_nullable: 'NO', column_default: 'false' })
+    expect(defs.falhas_login).toMatchObject({ data_type: 'integer', is_nullable: 'NO', column_default: '0' })
+    expect(defs.bloqueado_ate).toMatchObject({ data_type: 'timestamp without time zone', is_nullable: 'YES' })
+    const { rows } = await pool.query('SELECT sub, papel, origem, trocar_senha, falhas_login FROM usuario')
+    expect(rows).toEqual([{ sub: 's1', papel: 'admin', origem: 'sso', trocar_senha: false, falhas_login: 0 }])
+    await expect(
+      pool.query("INSERT INTO usuario (sub, origem) VALUES ('x', 'outra')")
+    ).rejects.toThrow(/check/i)
+  })
+
   it('não roda ALTER TABLE quando tipo_id já existe (evita lock a cada subida)', async () => {
     await migrate(pool)
     const sqls = []

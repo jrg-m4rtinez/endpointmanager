@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Hexagon, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react'
-import { api, logout } from './api.js'
+import { api, EVENTO_SESSAO_EXPIRADA, EVENTO_TROCAR_SENHA, logout } from './api.js'
 import Sidebar, { abasVisiveis } from './components/Sidebar.jsx'
+import { TelaCentral } from './components/TelaCentral.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import AguardandoLiberacao from './pages/AguardandoLiberacao.jsx'
+import Login from './pages/Login.jsx'
+import TrocarSenha from './pages/TrocarSenha.jsx'
 import NaoClassificados from './pages/NaoClassificados.jsx'
 import Endpoints from './pages/Endpoints.jsx'
 import Departamentos from './pages/Departamentos.jsx'
@@ -20,20 +23,6 @@ function abaDoHash(user) {
 
 /* ---------- Telas fora do shell ---------- */
 
-function TelaCentral({ children }) {
-  return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden px-4">
-      <div
-        className="pointer-events-none absolute top-1/3 left-1/2 size-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/10 blur-3xl"
-        aria-hidden="true"
-      />
-      <section className="relative w-full max-w-md animate-fade-in rounded-2xl border border-border bg-surface/90 p-8 text-center shadow-2xl shadow-black/40 backdrop-blur">
-        {children}
-      </section>
-    </main>
-  )
-}
-
 function Carregando() {
   return (
     <main className="grid min-h-screen place-items-center" aria-busy="true">
@@ -47,27 +36,6 @@ function Carregando() {
         </span>
       </div>
     </main>
-  )
-}
-
-function FalhaLogin() {
-  return (
-    <TelaCentral>
-      <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl border border-danger/30 bg-danger/10 text-danger">
-        <TriangleAlert className="size-6" aria-hidden="true" />
-      </div>
-      <h1 className="text-lg font-semibold tracking-tight">Falha no login</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted">
-        Não foi possível concluir a autenticação. Tente novamente; se o problema continuar, fale com um administrador.
-      </p>
-      <a
-        href="/api/auth/login"
-        className="mt-6 inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-      >
-        <RefreshCw className="size-4" aria-hidden="true" />
-        Tentar novamente
-      </a>
-    </TelaCentral>
   )
 }
 
@@ -175,39 +143,88 @@ function Shell({ user, onSessao }) {
 
 /* ---------- Bootstrap da sessão ---------- */
 
+const AVISO_EXPIROU = { tipo: 'info', texto: 'Sua sessão expirou. Entre novamente para continuar.' }
+const AVISO_FALHA_MS = { tipo: 'erro', texto: 'Falha no login com a Microsoft. Tente novamente ou fale com um administrador.' }
+
+/** Lê e remove ?erro=login da URL (o callback OIDC redireciona para /?erro=login). */
+function consumirErroLogin() {
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('erro') !== 'login') return false
+  params.delete('erro')
+  const qs = params.toString()
+  window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
+  return true
+}
+
 function Raiz() {
-  const erroLogin = new URLSearchParams(window.location.search).get('erro') === 'login'
-  const [estado, setEstado] = useState(erroLogin ? { tipo: 'erro_login' } : { tipo: 'carregando' })
+  const [erroLogin] = useState(consumirErroLogin)
+  const [estado, setEstado] = useState(() =>
+    erroLogin ? { tipo: 'login', aviso: AVISO_FALHA_MS } : { tipo: 'carregando' }
+  )
   const { notify } = useToast()
+  const estadoRef = useRef(estado)
+  estadoRef.current = estado
+  const seq = useRef(0) // descarta respostas de /auth/me fora de ordem
 
-  useEffect(() => {
-    if (erroLogin) return
-    api('/auth/me')
-      .then(user => setEstado({ tipo: 'pronto', user }))
-      .catch(err => setEstado({ tipo: 'erro', mensagem: err.message }))
-  }, [erroLogin])
-
-  const sair = () => logout().catch(err => notify(err.message, 'error'))
-
-  const recarregarSessao = useCallback(
-    () =>
-      api('/auth/me')
-        .then(user => setEstado({ tipo: 'pronto', user }))
-        .catch(err => notify(err.message, 'error')),
+  const carregarSessao = useCallback(
+    ({ silencioso = false } = {}) => {
+      const meu = ++seq.current
+      return api('/auth/me')
+        .then(user => meu === seq.current && setEstado({ tipo: 'pronto', user }))
+        .catch(err => {
+          if (meu !== seq.current) return
+          if (err.status === 401) {
+            // No meio do uso o evento 'sessao-expirada' já trocou para o Login com aviso.
+            if (estadoRef.current.tipo !== 'login') setEstado({ tipo: 'login', aviso: null })
+          } else if (silencioso || estadoRef.current.tipo === 'pronto') {
+            notify(err.message, 'error')
+          } else {
+            setEstado({ tipo: 'erro', mensagem: err.message })
+          }
+        })
+    },
     [notify]
   )
+
+  useEffect(() => {
+    if (!erroLogin) carregarSessao()
+  }, [erroLogin, carregarSessao])
+
+  useEffect(() => {
+    // Só é "expirou" se havia sessão; no bootstrap o 401 de /auth/me cai no catch acima.
+    const onExpirada = () => {
+      if (estadoRef.current.tipo === 'pronto') {
+        seq.current++
+        setEstado({ tipo: 'login', aviso: AVISO_EXPIROU })
+      }
+    }
+    const onTrocarSenha = () => {
+      if (estadoRef.current.tipo === 'pronto' && !estadoRef.current.user.trocarSenha) carregarSessao()
+    }
+    window.addEventListener(EVENTO_SESSAO_EXPIRADA, onExpirada)
+    window.addEventListener(EVENTO_TROCAR_SENHA, onTrocarSenha)
+    return () => {
+      window.removeEventListener(EVENTO_SESSAO_EXPIRADA, onExpirada)
+      window.removeEventListener(EVENTO_TROCAR_SENHA, onTrocarSenha)
+    }
+  }, [carregarSessao])
+
+  const sair = () => logout().catch(err => notify(err.message, 'error'))
+  const recarregarSessao = useCallback(() => carregarSessao({ silencioso: true }), [carregarSessao])
 
   switch (estado.tipo) {
     case 'carregando':
       return <Carregando />
-    case 'erro_login':
-      return <FalhaLogin />
+    case 'login':
+      return <Login aviso={estado.aviso} onEntrou={recarregarSessao} />
     case 'erro':
       return <ErroSessao mensagem={estado.mensagem} />
-    default:
-      return estado.user.papel === 'pendente'
-        ? <AguardandoLiberacao user={estado.user} onLogout={sair} />
-        : <Shell user={estado.user} onSessao={recarregarSessao} />
+    default: {
+      const { user } = estado
+      if (user.trocarSenha) return <TrocarSenha user={user} onConcluido={recarregarSessao} onLogout={sair} />
+      if (user.papel === 'pendente') return <AguardandoLiberacao user={user} onLogout={sair} />
+      return <Shell user={user} onSessao={recarregarSessao} />
+    }
   }
 }
 

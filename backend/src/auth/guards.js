@@ -4,15 +4,27 @@ async function requireAuth(req, res, next) {
     const userId = req.session && req.session.userId
     if (!userId) return res.status(401).json({ error: 'nao_autenticado' })
     const { rows } = await req.app.locals.pool.query(
-      'SELECT id, sub, email, nome, papel FROM usuario WHERE id = $1',
+      'SELECT id, sub, email, nome, papel, origem, trocar_senha FROM usuario WHERE id = $1',
       [userId]
     )
     if (!rows[0]) return res.status(401).json({ error: 'nao_autenticado' })
+    // Login local desligado encerra também as sessões locais ainda abertas.
+    if (rows[0].origem === 'local' && !req.app.locals.config.loginLocal) {
+      return res.status(401).json({ error: 'nao_autenticado' })
+    }
     req.user = rows[0]
     next()
   } catch (err) {
     next(err)
   }
+}
+
+// Rotas de dados: quem ainda precisa trocar a senha temporária não passa daqui.
+// Não usar nas rotas /auth/* (me, logout e troca de senha seguem liberadas).
+function requireSenhaTrocada(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'nao_autenticado' })
+  if (req.user.trocar_senha) return res.status(403).json({ error: 'trocar_senha' })
+  next()
 }
 
 function requireRole(...papeis) {
@@ -32,4 +44,4 @@ function requireXhrOnWrite(req, res, next) {
   next()
 }
 
-module.exports = { requireAuth, requireRole, requireXhrOnWrite }
+module.exports = { requireAuth, requireSenhaTrocada, requireRole, requireXhrOnWrite }

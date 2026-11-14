@@ -12,6 +12,7 @@ async function freshDatabase() {
   const pool = new Pool({ connectionString: url.toString() })
   return {
     pool,
+    url: url.toString(),
     async drop() {
       await pool.end()
       await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)

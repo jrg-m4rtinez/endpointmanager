@@ -4,16 +4,17 @@ import { createApp } from '../../src/app'
 import { migrate } from '../../src/migrate'
 import { loadConfig } from '../../src/config'
 
-export async function buildTestApp({ ddClient = null, bootstrapAdminEmail, appBaseUrl = 'http://localhost:3000' } = {}) {
-  const { pool, drop } = await freshDatabase()
+export async function buildTestApp({ ddClient = null, bootstrapAdminEmail, appBaseUrl = 'http://localhost:3000', loginLocal } = {}) {
+  const { pool, drop, url } = await freshDatabase()
   await migrate(pool)
   const config = loadConfig({
     APP_BASE_URL: appBaseUrl,
     SESSION_SECRET: 'test-secret',
     BOOTSTRAP_ADMIN_EMAIL: bootstrapAdminEmail,
+    LOGIN_LOCAL: loginLocal,
   })
   const app = createApp({ pool, ddClient, oidc: createFakeOidc(), config })
-  return { app, pool, drop }
+  return { app, pool, drop, url }
 }
 
 export async function loginAs(agent, { sub, email, name }) {

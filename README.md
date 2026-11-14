@@ -8,7 +8,7 @@ Interface web para classificar os endpoints (hosts) da empresa por criticidade, 
 - **Não classificados**: hosts que o DefectDojo conhece (via API, só leitura) e que não estão em `departamento_endpoint`. Ordenados por findings ativos. Dá para classificar na linha, ignorar ou atualizar a lista.
 - **Departamentos** e **Tipos**: CRUD simples.
 - **Acessos**: quem já logou e qual papel tem. Só admin vê essa aba.
-- Login por OIDC (Entra ID em produção, Keycloak no lab). Não existe senha local.
+- Login por OIDC (Entra ID em produção, Keycloak no lab) e, ao lado dele, login local com e-mail e senha (veja "Login local").
 
 ## Arquitetura
 
@@ -82,7 +82,30 @@ Usuário novo entra como `pendente` e vê "aguardando liberação" até um admin
 
 Toda a configuração vem do `.env` (modelo em `.env.example`). O backend não sobe sem: `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE`, `SESSION_SECRET`, `APP_BASE_URL`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. A mensagem de erro lista as que faltam. `BOOTSTRAP_ADMIN_EMAIL`, `DD_URL` e `DD_API_KEY` são opcionais (sem `DD_*` o app sobe sem a aba de não classificados).
 
-Se `APP_BASE_URL` começa com `https://`, o backend liga `trust proxy` e cookie `Secure`.
+Se `APP_BASE_URL` começa com `https://`, o backend liga o cookie `Secure`. O `trust proxy` do Express fica sempre ligado, e `TRUST_PROXY` (inteiro, padrão `1`) diz quantos proxies existem à frente do backend. O backend nunca deve ser exposto direto: só pelo nginx do frontend.
+
+`LOGIN_LOCAL` (`ligado`, o padrão, ou `desligado`) liga ou desliga o login local.
+
+## Login local
+
+Além do SSO, o app aceita login com e-mail e senha próprios (`LOGIN_LOCAL=ligado`, o padrão).
+
+- Só o admin cria usuários locais: aba **Acessos**, botão **+ Novo usuário local**. O app gera uma senha temporária de 16 caracteres e a mostra uma única vez. No primeiro login a pessoa é obrigada a trocar a senha (mínimo de 12 caracteres). **Redefinir senha** gera outra temporária e também zera o bloqueio.
+- Senhas guardadas com hash argon2id, nunca em texto.
+- 5 senhas erradas bloqueiam a conta por 15 minutos; há também um limite de 20 tentativas por 15 minutos por IP (resposta 429). A resposta de falha é sempre a mesma (401 `credenciais_invalidas`).
+- Trocar ou redefinir a senha não derruba sessões abertas (valem até 8 horas). Para encerrar todas: `DELETE FROM em_sessao` no banco, ou trocar o `SESSION_SECRET`.
+- Com `LOGIN_LOCAL=desligado`, `/auth/local/*` responde 404 e o formulário some.
+- Limitação: se alguém tem conta local e entra pela Microsoft com o mesmo e-mail, nasce uma conta SSO separada. O `BOOTSTRAP_ADMIN_EMAIL` só vale para contas SSO.
+
+### Admin de emergência
+
+Para quando ninguém consegue entrar. Cria (ou redefine a senha de) um admin local e imprime a senha temporária:
+
+```bash
+docker compose exec backend node scripts/criar-admin-local.js <EMAIL> "<NOME>"
+```
+
+Recusa e-mails de usuários SSO. Ignora `LOGIN_LOCAL=desligado`: com o login local desligado, o admin criado não consegue entrar.
 
 ## Schema
 
@@ -174,4 +197,4 @@ O frontend não tem testes automatizados.
 
 ## Produção
 
-Veja [docs/PRODUCAO.md](docs/PRODUCAO.md). Produção usa **só** `docker-compose.yml`, nunca o arquivo do lab.
+Veja [docs/PRODUCAO.md](docs/PRODUCAO.md) e, para trocar a v1 pela v2 passo a passo (para quem não é da área técnica), [docs/MIGRACAO-PRODUCAO.md](docs/MIGRACAO-PRODUCAO.md). Produção usa **só** `docker-compose.yml`, nunca o arquivo do lab.
